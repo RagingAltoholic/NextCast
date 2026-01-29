@@ -99,17 +99,10 @@ Full version 1.0.0 release notes with:
 
 ---
 
-## Next Steps (Post-1.0.0)
-
-The user should now:
-1. **Rename the folder** from `NextKey` to `NextCast` in AddOns directory
-2. **Test in-game** to verify all functionality
-3. **Optional: Publish** to CurseForge, Wago, or GitHub
-
 ### Potential Future Enhancements (2.0.0+)
 - Profile system (save multiple configurations)
 - Minimap button
-- WeakAuras integration
+- ConsolePort integration
 - Additional detection methods (proc highlights, overlay highlights)
 - Sound alerts
 - Multiple button support
@@ -136,33 +129,6 @@ NextCast/
 
 ---
 
-## Testing Checklist
-
-Before final release, verify:
-- [ ] `/reload` loads addon without errors
-- [ ] Button appears in Edit Mode
-- [ ] Button can be dragged
-- [ ] Clicking button opens settings
-- [ ] All settings apply correctly
-- [ ] Scaling doesn't move button
-- [ ] Position saves across `/reload`
-- [ ] Slash commands work (`/nextcast config`, `/nextcast on/off`, etc.)
-- [ ] Options panel accessible (ESC → Interface → AddOns → NextCast)
-- [ ] Cooldown warning changes color correctly
-- [ ] Keybinds display correctly (S1, CA format)
-- [ ] Assisted Combat highlights detected
-
----
-
 ## Congratulations! 🎉
 
 **NextCast 1.0.0 is complete and ready for release!**
-
-You've built a polished, feature-complete addon with:
-- Clean modular architecture
-- Full Edit Mode integration
-- Comprehensive customization
-- Excellent documentation
-- Professional code quality
-
-Time to share it with the WoW community! 🚀

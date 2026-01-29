@@ -36,8 +36,9 @@ NextCast is a World of Warcraft addon that displays Blizzard's recommended spell
 
 ### Configuration
 
-Open the settings panel in two ways:
-- **In-Game:** Press `ESC` → Interface → AddOns → NextCast
+Open the settings panel in three ways:
+- **Editmode:** Press `ESC` → Editmode
+- **In-Game:** Press `ESC` → Options → AddOns → NextCast
 - **Command:** `/nextcast config`
 
 Available settings:
@@ -103,8 +104,7 @@ A: Increase the cooldown font size in settings, or increase the button scale.
 ## Support
 
 For bugs, feature requests, or questions:
-- Open an issue on GitHub (if applicable)
-- Contact RagingAltoholic in-game
+- [(Open an issue on GitHub)](https://github.com/RagingAltoholic/NextCast/issues)
 
 ## Credits
 

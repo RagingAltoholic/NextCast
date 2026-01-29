@@ -1,4 +1,4 @@
-# NextCast: Assisted Combat Detection Upgrade - Summary
+# NextCast: Assisted Combat Detection Upgrade 1.0.1 - Summary
 
 ## Issue Resolution
 
