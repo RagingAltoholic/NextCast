@@ -85,14 +85,11 @@ function Tracker:Initialize()
     self.frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
     self.frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
     self.frame:RegisterEvent("UPDATE_BINDINGS")
-    self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
-    self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
     self.frame:RegisterEvent("ACTIONBAR_UPDATE_STATE")
     self.frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     self.frame:SetScript("OnEvent", function(_, event, ...) self:OnEvent(event, ...) end)
 
     self.buttons = BuildButtonList()
-    self.activeSpells = {}
     self.lastUpdate = 0
     self.frame:SetScript("OnUpdate", function(_, elapsed)
         self.lastUpdate = self.lastUpdate + elapsed
@@ -106,18 +103,6 @@ function Tracker:Initialize()
 end
 
 function Tracker:OnEvent(event, ...)
-    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
-        local spellId = ...
-        if spellId then
-            self.activeSpells[spellId] = true
-        end
-    elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
-        local spellId = ...
-        if spellId then
-            self.activeSpells[spellId] = nil
-        end
-    end
-
     self:Update()
 end
 
