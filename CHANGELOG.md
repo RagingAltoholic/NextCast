@@ -5,6 +5,17 @@ All notable changes to NextCast will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Improved Assisted Combat Detection**
+  - Upgraded from child frame [14] polling to modern event-driven architecture
+  - Primary method: C_AssistedCombat API (`GetAssistedHighlightSpellIDs`)
+  - Secondary method: SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE events for proc detection
+  - Added EventRegistry callbacks for AssistedCombatManager state changes
+  - Retained child frame [14] as fallback for compatibility
+  - More responsive and accurate spell detection with better performance
+
 ## [1.0.0] - 2026-01-28
 
 ### 🎉 Initial Release - MVP

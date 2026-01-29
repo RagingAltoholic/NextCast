@@ -77,7 +77,11 @@ The addon only tracks **spell** actions - items, macros, and potions are ignored
 
 ## Technical Details
 
-- **Detection Method:** Monitors ActionButton child frame [14] for Assisted Combat highlight
+- **Detection Method:** Uses multiple robust methods for detecting Assisted Combat:
+  1. **Primary:** C_AssistedCombat API (`GetAssistedHighlightSpellIDs`)
+  2. **Secondary:** SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE events
+  3. **EventRegistry:** AssistedCombatManager callbacks for real-time updates
+  4. **Fallback:** ActionButton child frame [14] (legacy compatibility)
 - **Position Anchor:** BOTTOMLEFT (prevents button from shifting when scaled)
 - **Save Variable:** `NextCastDB` (stored in `WTF\Account\<Account>\SavedVariables\`)
 - **Modules:** Core, UI, Tracker, Settings, EditMode

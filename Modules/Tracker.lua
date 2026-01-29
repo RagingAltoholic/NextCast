@@ -22,10 +22,40 @@ local function FormatKeybind(keybind)
     return string.upper(keybind:gsub("%-", ""))
 end
 
+local glowingSpells = {}
+
 local function IsButtonGlowing(button)
     if not button then return false end
     
-    -- Check for Assisted Combat / Single Button Rotation highlight (child [14])
+    -- Primary method: Use C_AssistedCombat API to get highlighted spells
+    if C_AssistedCombat and C_AssistedCombat.GetAssistedHighlightSpellIDs then
+        local actionId = GetActionId(button)
+        if actionId then
+            local actionType, id = GetActionInfo(actionId)
+            if actionType == "spell" and id then
+                local highlightedSpells = C_AssistedCombat.GetAssistedHighlightSpellIDs()
+                if highlightedSpells then
+                    for _, spellID in ipairs(highlightedSpells) do
+                        if spellID == id then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Secondary method: Check SPELL_ACTIVATION_OVERLAY_GLOW events
+    local actionId = GetActionId(button)
+    if actionId then
+        local actionType, id = GetActionInfo(actionId)
+        if actionType == "spell" and id and glowingSpells[id] then
+            return true
+        end
+    end
+    
+    -- Fallback: Check for Assisted Combat highlight via child frame (legacy method)
+    -- This is kept as a fallback for older WoW versions or edge cases
     local children = {button:GetChildren()}
     if children[14] and children[14]:IsShown() then
         return true
@@ -87,7 +117,25 @@ function Tracker:Initialize()
     self.frame:RegisterEvent("UPDATE_BINDINGS")
     self.frame:RegisterEvent("ACTIONBAR_UPDATE_STATE")
     self.frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+    
+    -- Register SPELL_ACTIVATION_OVERLAY_GLOW events for better proc detection
+    self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
+    self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+    
     self.frame:SetScript("OnEvent", function(_, event, ...) self:OnEvent(event, ...) end)
+
+    -- Register EventRegistry callbacks for AssistedCombatManager (if available)
+    if EventRegistry then
+        EventRegistry:RegisterCallback("AssistedCombatManager.OnAssistedHighlightSpellChange", function()
+            self:Update()
+        end, self)
+        EventRegistry:RegisterCallback("AssistedCombatManager.RotationSpellsUpdated", function()
+            self:Update()
+        end, self)
+        EventRegistry:RegisterCallback("AssistedCombatManager.OnSetActionSpell", function()
+            self:Update()
+        end, self)
+    end
 
     self.buttons = BuildButtonList()
     self.lastUpdate = 0
@@ -103,6 +151,18 @@ function Tracker:Initialize()
 end
 
 function Tracker:OnEvent(event, ...)
+    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
+        local spellID = ...
+        if spellID then
+            glowingSpells[spellID] = true
+        end
+    elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+        local spellID = ...
+        if spellID then
+            glowingSpells[spellID] = nil
+        end
+    end
+    
     self:Update()
 end
 
