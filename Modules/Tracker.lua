@@ -27,34 +27,37 @@ local glowingSpells = {}
 local function IsButtonGlowing(button)
     if not button then return false end
     
+    -- Cache action ID and info to avoid redundant calls
+    local actionId = GetActionId(button)
+    if not actionId then return false end
+    
+    local actionType, id = GetActionInfo(actionId)
+    if actionType ~= "spell" or not id then return false end
+    
     -- Primary method: Use C_AssistedCombat API to get highlighted spells
     if C_AssistedCombat and C_AssistedCombat.GetAssistedHighlightSpellIDs then
-        local actionId = GetActionId(button)
-        if actionId then
-            local actionType, id = GetActionInfo(actionId)
-            if actionType == "spell" and id then
-                local highlightedSpells = C_AssistedCombat.GetAssistedHighlightSpellIDs()
-                if highlightedSpells then
-                    for _, spellID in ipairs(highlightedSpells) do
-                        if spellID == id then
-                            return true
-                        end
-                    end
+        local highlightedSpells = C_AssistedCombat.GetAssistedHighlightSpellIDs()
+        if highlightedSpells then
+            for _, spellID in ipairs(highlightedSpells) do
+                if spellID == id then
+                    return true
                 end
             end
         end
-    end
-    
-    -- Secondary method: Check SPELL_ACTIVATION_OVERLAY_GLOW events
-    local actionId = GetActionId(button)
-    if actionId then
-        local actionType, id = GetActionInfo(actionId)
-        if actionType == "spell" and id and glowingSpells[id] then
+        
+        -- Secondary method: Check SPELL_ACTIVATION_OVERLAY_GLOW events
+        -- Only use this as supplementary confirmation when C_AssistedCombat exists
+        if glowingSpells[id] then
+            return true
+        end
+    else
+        -- Fallback path for older WoW versions: use overlay glow + child frame
+        if glowingSpells[id] then
             return true
         end
     end
     
-    -- Fallback: Check for Assisted Combat highlight via child frame (legacy method)
+    -- Final fallback: Check for Assisted Combat highlight via child frame (legacy method)
     -- This is kept as a fallback for older WoW versions or edge cases
     local children = {button:GetChildren()}
     if children[14] and children[14]:IsShown() then
