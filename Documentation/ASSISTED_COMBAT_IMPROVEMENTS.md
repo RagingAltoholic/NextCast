@@ -1,8 +1,8 @@
-# Assisted Combat Detection Improvements
+# Assisted Combat Detection Implementation
 
 ## Overview
 
-This document explains the improvements made to NextCast's Assisted Combat detection mechanism, moving from a fragile child frame polling approach to a robust, event-driven architecture using official Blizzard APIs.
+This document explains NextCast's Assisted Combat detection mechanism using official Blizzard APIs.
 
 ## Problem Statement
 
@@ -19,67 +19,39 @@ end
 **Issues with this approach:**
 - **Fragility**: Frame indices can change between WoW patches, breaking the addon
 - **Performance**: Constant polling and frame enumeration is inefficient
-- **Accuracy**: Misses proc-based spell activations that don't go through the button highlight
+- **Accuracy**: Unreliable detection
 - **Maintenance**: No official documentation; relies on reverse engineering
 
-## New Solution
+## Current Solution
 
-The improved implementation uses a **multi-layered detection strategy** with official APIs and event-driven hooks:
+The implementation uses the **official C_AssistedCombat API**:
 
-### 1. Primary Method: C_AssistedCombat API
+### C_AssistedCombat.GetNextCastSpell(checkForVisibleButton)
 
 ```lua
-if C_AssistedCombat and C_AssistedCombat.GetAssistedHighlightSpellIDs then
-    local highlightedSpells = C_AssistedCombat.GetAssistedHighlightSpellIDs()
-    if highlightedSpells then
-        for _, spellID in ipairs(highlightedSpells) do
-            if spellID == id then
-                return true
-            end
-        end
+-- Get the recommended spell from C_AssistedCombat API
+local recommendedSpellId = nil
+if C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
+    local success, result = pcall(C_AssistedCombat.GetNextCastSpell, true)
+    if success and result and type(result) == "number" and result > 0 then
+        recommendedSpellId = result
     end
 end
 ```
 
+**Parameters:**
+- `checkForVisibleButton` (boolean): When `true`, only returns spell if it has a visible action button
+
 **Benefits:**
-- ✅ Official Blizzard API introduced in Patch 11.1.7+
+- ✅ Official Blizzard API (WoW 11.0+)
 - ✅ Direct access to the game's internal rotation logic
 - ✅ No reverse engineering required
 - ✅ Future-proof against UI changes
+- ✅ Simple, single-source detection
 
-### 2. Secondary Method: Spell Activation Overlay Events
+## EventRegistry Callbacks
 
-```lua
--- Register events
-self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
-self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
-
--- Event handler
-function Tracker:OnEvent(event, ...)
-    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
-        local spellID = ...
-        if spellID then
-            glowingSpells[spellID] = true
-        end
-    elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
-        local spellID = ...
-        if spellID then
-            glowingSpells[spellID] = nil
-        end
-    end
-    self:Update()
-end
-```
-
-**Benefits:**
-- ✅ Catches proc-based spell activations (e.g., Hot Streak, Sudden Death)
-- ✅ Event-driven (no polling overhead)
-- ✅ Near-instant response to spell state changes
-- ✅ Used as supplementary confirmation alongside C_AssistedCombat API
-
-**Note:** The overlay glow events are only used in conjunction with C_AssistedCombat API checks to avoid false positives from procs that aren't current Assisted Combat recommendations.
-
-### 3. EventRegistry Callbacks
+To receive real-time updates when Blizzard's rotation changes:
 
 ```lua
 if EventRegistry then
@@ -100,64 +72,51 @@ end
 - ✅ Synchronizes with the game's internal state instantly
 - ✅ Minimal latency between recommendation and display
 
-### 4. Fallback Method: Child Frame [14]
+## Performance
 
-The original child frame detection is **retained as a fallback** for:
-- Older WoW versions that don't have C_AssistedCombat API
-- Edge cases where the API might not be available
-- Backwards compatibility
-
-```lua
--- Fallback: Check for Assisted Combat highlight via child frame (legacy method)
-local children = {button:GetChildren()}
-if children[14] and children[14]:IsShown() then
-    return true
-end
-```
-
-## Performance Improvements
-
-| Aspect | Old Approach | New Approach | Improvement |
-|--------|--------------|--------------|-------------|
-| Update Trigger | Polling (0.15s intervals) | Event-driven | ~87% reduction in unnecessary checks |
-| Frame Enumeration | Every update | Only as fallback | Minimal overhead |
-| API Calls | Manual button scanning | Direct spell ID lookup | O(1) vs O(n) complexity |
-| Response Time | Up to 150ms delay | Near-instant | <16ms typical |
-| Proc Detection | Limited | Comprehensive | Catches all glow events |
+- ✅ Event-driven updates via EventRegistry callbacks
+- ✅ O(1) spell lookup complexity
+- ✅ Near-instant response time
 
 ## Compatibility
 
-- **WoW Retail 11.1.7+**: Full feature support with all methods
-- **WoW Retail 11.0-11.1.6**: Uses events + fallback (no C_AssistedCombat)
-- **Classic/TBC/Wrath**: Uses fallback only (no modern APIs)
-
-The multi-layered approach ensures the addon works across all supported WoW versions.
+- **WoW Retail 11.0+**: Full support with C_AssistedCombat API
+- **Earlier versions**: Not supported (requires Assisted Combat system)
 
 ## Testing Recommendations
-
-To verify the improvements work correctly:
 
 1. **Enable Assisted Combat** in WoW:
    - Open Edit Mode (ESC → Edit Mode)
    - Enable "Assisted Combat" or "Single Button Rotation"
+   - Ensure `assistedMode` CVar is enabled: `/console assistedMode 1`
 
-2. **Test detection methods**:
+2. **Test detection**:
    - Enter combat and observe spell recommendations
    - Verify NextCast displays the highlighted spell
-   - Test with proc-based abilities (e.g., Sudden Death, Hot Streak)
-   - Check performance with `/run NextCast:DebugPrint("Test")`
+   - Enable debug mode: `/nextcast debug`
+   - Monitor chat for spell ID detection
 
-3. **Verify fallback works**:
-   - Test on older WoW versions (if applicable)
-   - Ensure addon doesn't error if C_AssistedCombat is unavailable
+3. **Verify API availability**:
+   - Test that `C_AssistedCombat.GetNextCastSpell()` returns spell IDs
+   - Ensure addon doesn't error if API is unavailable
 
 ## References
 
 - [World of Warcraft API Documentation](https://warcraft.wiki.gg/wiki/World_of_Warcraft_API)
 - [C_AssistedCombat API](https://warcraft.wiki.gg/wiki/API_C_AssistedCombat)
-- [SPELL_ACTIVATION_OVERLAY_GLOW Events](https://wowpedia.fandom.com/wiki/SPELL_ACTIVATION_OVERLAY_GLOW_SHOW)
 - [JustAC Addon](https://github.com/wealdly/JustAC) - Reference implementation
 - [Wowhead Combat Assistant Guide](https://www.wowhead.com/guide/ui/combat-assistant-one-button-rotation-tool-setup)
+
+## Summary
+
+NextCast uses the official `C_AssistedCombat.GetNextCastSpell()` API to detect Blizzard's spell recommendations. This provides a simple, reliable, single-source detection method that is future-proof against WoW UI changes.
+
+**Key Benefits:**
+- ✅ Official Blizzard API (no reverse engineering)
+- ✅ Simple and maintainable
+- ✅ Future-proof against UI changes
+- ✅ Event-driven for instant updates
+- ✅ Follows community best practices
 
 ## Summary
 

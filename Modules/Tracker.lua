@@ -22,8 +22,6 @@ local function FormatKeybind(keybind)
     return string.upper(keybind:gsub("%-", ""))
 end
 
-local glowingSpells = {}
-
 local function GetActionId(button)
     if button.action then return button.action end
     if button.GetPagedID then
@@ -33,49 +31,6 @@ local function GetActionId(button)
     local attr = button:GetAttribute("action")
     if attr and attr > 0 then return attr end
     return nil
-end
-
-local function IsButtonGlowing(button)
-    if not button then return false end
-    
-    -- Cache action ID and info to avoid redundant calls
-    local actionId = GetActionId(button)
-    if not actionId then return false end
-    
-    local actionType, id = GetActionInfo(actionId)
-    if actionType ~= "spell" or not id then return false end
-    
-    -- Primary method: Use C_AssistedCombat API to get highlighted spells
-    if C_AssistedCombat and C_AssistedCombat.GetAssistedHighlightSpellIDs then
-        local highlightedSpells = C_AssistedCombat.GetAssistedHighlightSpellIDs()
-        if highlightedSpells then
-            for _, spellID in ipairs(highlightedSpells) do
-                if spellID == id then
-                    return true
-                end
-            end
-        end
-        
-        -- Secondary method: Check SPELL_ACTIVATION_OVERLAY_GLOW events
-        -- Only use this as supplementary confirmation when C_AssistedCombat exists
-        if glowingSpells[id] then
-            return true
-        end
-    else
-        -- Fallback path for older WoW versions: use overlay glow + child frame
-        if glowingSpells[id] then
-            return true
-        end
-    end
-    
-    -- Final fallback: Check for Assisted Combat highlight via child frame (legacy method)
-    -- This is kept as a fallback for older WoW versions or edge cases
-    local children = {button:GetChildren()}
-    if children[14] and children[14]:IsShown() then
-        return true
-    end
-    
-    return false
 end
 
 local function BuildButtonList()
@@ -154,22 +109,6 @@ function Tracker:Initialize()
 end
 
 function Tracker:OnEvent(event, ...)
-    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
-        local spellID = ...
-        if spellID then
-            glowingSpells[spellID] = true
-        end
-    elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
-        local spellID = ...
-        if spellID then
-            glowingSpells[spellID] = nil
-        end
-    end
-    
-    self:Update()
-end
-
-local function IsDungeonOrRaid()
     local inInstance, instanceType = IsInInstance()
     return inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "scenario")
 end
@@ -199,40 +138,63 @@ function Tracker:Update()
         return
     end
 
+    -- Get the recommended spell from C_AssistedCombat API
+    -- GetNextCastSpell(true) = only return if spell has a visible action button
+    local recommendedSpellId = nil
+    if C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
+        local success, result = pcall(C_AssistedCombat.GetNextCastSpell, true)
+        if success and result and type(result) == "number" and result > 0 then
+            recommendedSpellId = result
+            if db.debugMode then
+                print("[NextCast] Recommended spell:", recommendedSpellId)
+            end
+        elseif db.debugMode then
+            print("[NextCast] No spell recommended by C_AssistedCombat")
+        end
+    elseif db.debugMode then
+        print("[NextCast] C_AssistedCombat API not available")
+    end
+
     local texture, keybind = nil, nil
     local cooldownStart, cooldownDuration, cooldownEnabled
 
-    for _, entry in ipairs(self.buttons) do
-        local button = entry.button
-        local isGlowing = IsButtonGlowing(button)
-        if button and button:IsShown() and isGlowing then
-            local actionId = GetActionId(button)
-            if actionId then
-                local actionType, id = GetActionInfo(actionId)
-                -- Only show spells, not items/macros/potions
-                if actionType == "spell" and id then
-                    if C_Spell and C_Spell.GetSpellTexture then
-                        texture = C_Spell.GetSpellTexture(id)
-                    elseif GetSpellTexture then
-                        texture = GetSpellTexture(id)
-                    end
-
-                    local bindingKey = GetBindingKey(entry.binding)
-                    if bindingKey then
-                        keybind = FormatKeybind(GetBindingText(bindingKey, "KEY_", 1))
-                    end
-
-                    if actionId then
-                        cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(actionId)
-                    elseif button and button.cooldown and button.cooldown.GetCooldownTimes then
-                        local startMS, durationMS = button.cooldown:GetCooldownTimes()
-                        if startMS and durationMS then
-                            cooldownStart = startMS / 1000
-                            cooldownDuration = durationMS / 1000
-                            cooldownEnabled = 1
+    -- If we have a recommended spell, find it on our action bars
+    if recommendedSpellId then
+        for _, entry in ipairs(self.buttons) do
+            local button = entry.button
+            if button and button:IsShown() then
+                local actionId = GetActionId(button)
+                if actionId then
+                    local actionType, spellId = GetActionInfo(actionId)
+                    -- Only show spells, not items/macros/potions
+                    if actionType == "spell" and spellId and spellId == recommendedSpellId then
+                        if db.debugMode then
+                            print("[NextCast] Found spell", spellId, "in button:", entry.binding)
                         end
+                        
+                        if C_Spell and C_Spell.GetSpellTexture then
+                            texture = C_Spell.GetSpellTexture(spellId)
+                        elseif GetSpellTexture then
+                            texture = GetSpellTexture(spellId)
+                        end
+
+                        local bindingKey = GetBindingKey(entry.binding)
+                        if bindingKey then
+                            keybind = FormatKeybind(GetBindingText(bindingKey, "KEY_", 1))
+                        end
+
+                        if actionId then
+                            cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(actionId)
+                        elseif button and button.cooldown and button.cooldown.GetCooldownTimes then
+                            local startMS, durationMS = button.cooldown:GetCooldownTimes()
+                            if startMS and durationMS then
+                                cooldownStart = startMS / 1000
+                                cooldownDuration = durationMS / 1000
+                                cooldownEnabled = 1
+                            end
+                        end
+                        break
                     end
-                    break
                 end
             end
         end

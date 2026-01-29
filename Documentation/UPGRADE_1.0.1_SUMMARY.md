@@ -23,22 +23,18 @@ end
 - ❌ Misses proc-based activations
 - ❌ No official API support
 
-### After (Multi-Layered API-Driven)
+### After (Official API)
 ```lua
--- Primary: Official C_AssistedCombat API
-if C_AssistedCombat and C_AssistedCombat.GetAssistedHighlightSpellIDs then
-    local highlightedSpells = C_AssistedCombat.GetAssistedHighlightSpellIDs()
-    -- Check if spell is in highlighted list
+-- Use official C_AssistedCombat API
+if C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
+    local success, result = pcall(C_AssistedCombat.GetNextCastSpell, true)
+    if success and result and type(result) == "number" and result > 0 then
+        recommendedSpellId = result
+    end
 end
-
--- Secondary: Event-driven glow detection
-self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
-self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
 
 -- EventRegistry: Real-time callbacks
 EventRegistry:RegisterCallback("AssistedCombatManager.OnAssistedHighlightSpellChange", ...)
-
--- Fallback: Frame 14 (legacy compatibility only)
 ```
 
 **Benefits:**

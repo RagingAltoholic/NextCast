@@ -2,6 +2,19 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.0.3] - 2026-01-29
+
+### Bug Fix - Critical
+- Fixed incorrect C_AssistedCombat API usage that prevented spell detection
+- Corrected API call from non-existent `GetAssistedHighlightSpellIDs()` to actual `GetNextCastSpell()`
+- Removed obsolete detection methods (overlay glow events and child frame fallback)
+- Simplified detection logic to use only official Blizzard API
+
+### Changed
+- Now uses `C_AssistedCombat.GetNextCastSpell(true)` for spell recommendations
+- Cleaner, more reliable single-source detection
+- Updated documentation to reflect correct API usage
+
 ## [1.0.2] - 2026-01-29
 
 ### Bug Fix
