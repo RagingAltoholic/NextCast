@@ -5,7 +5,7 @@ NextCast:NewModule("Core", Core)
 
 local defaults = {
     enabled = true,
-    showOutOfCombat = false,
+    showOutOfCombat = true,
     showCooldownSwipe = true,
     showCooldownText = true,
     showKeybind = true,
@@ -17,7 +17,7 @@ local defaults = {
     cdFontColor = { r = 1.0, g = 0.95, b = 0.6 },
     keybindFontSize = 12,
     keybindFontColor = { r = 1.0, g = 1.0, b = 1.0 },
-    position = { point = "BOTTOMLEFT", relativePoint = "BOTTOMLEFT", x = 400, y = 300 },
+    position = { point = "BOTTOMLEFT", relativePoint = "BOTTOMLEFT", x = 935, y = 515 },
     trackAssistedCombat = true,
     trackOverlay = true,
     trackProcs = false,
