@@ -1,0 +1,15 @@
+## Interface: 120000, 120001
+## Title: NextCast
+## Notes: Shows Blizzard Assisted Combat as a customizablefloating button.
+## Author: RagingAltoholic
+## Category-enUS: HUD
+## Version: 1.0.0
+## SavedVariables: NextCastDB
+## OptionalDeps: Blizzard_Settings
+
+NextCast.lua
+Modules\Core.lua
+Modules\UI.lua
+Modules\Tracker.lua
+Modules\Settings.lua
+Modules\EditMode.lua
