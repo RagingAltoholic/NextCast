@@ -24,6 +24,17 @@ end
 
 local glowingSpells = {}
 
+local function GetActionId(button)
+    if button.action then return button.action end
+    if button.GetPagedID then
+        local id = button:GetPagedID()
+        if id and id > 0 then return id end
+    end
+    local attr = button:GetAttribute("action")
+    if attr and attr > 0 then return attr end
+    return nil
+end
+
 local function IsButtonGlowing(button)
     if not button then return false end
     
@@ -65,17 +76,6 @@ local function IsButtonGlowing(button)
     end
     
     return false
-end
-
-local function GetActionId(button)
-    if button.action then return button.action end
-    if button.GetPagedID then
-        local id = button:GetPagedID()
-        if id and id > 0 then return id end
-    end
-    local attr = button:GetAttribute("action")
-    if attr and attr > 0 then return attr end
-    return nil
 end
 
 local function BuildButtonList()

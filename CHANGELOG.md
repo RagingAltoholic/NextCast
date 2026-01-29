@@ -2,6 +2,11 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.0.2] - 2026-01-29
+
+### Bug Fix
+- Fixed undefined `GetActionId` function by ensuring proper declaration order
+
 ## [1.0.1] - 2026-01-29
 
 ### Bug Fix
