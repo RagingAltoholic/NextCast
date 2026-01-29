@@ -2,6 +2,11 @@ local _, NextCast = ...
 
 local Tracker = {}
 NextCast:NewModule("Tracker", Tracker)
+-- Cache for C_AssistedCombat API result to prevent excessive calls
+local cachedRecommendedSpell = nil
+local lastApiCallTime = 0
+local API_CACHE_DURATION = 0.1  -- Cache API result for 100ms
+
 
 local function FormatTime(seconds)
     if seconds <= 0 then return "" end
@@ -139,20 +144,35 @@ function Tracker:Update()
     end
 
     -- Get the recommended spell from C_AssistedCombat API
-    -- GetNextCastSpell(true) = only return if spell has a visible action button
+    -- Cache result to avoid excessive API calls that cause latency
     local recommendedSpellId = nil
+        local currentTime = GetTime()
+    
     if C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
-        local success, result = pcall(C_AssistedCombat.GetNextCastSpell, true)
-        if success and result and type(result) == "number" and result > 0 then
-            recommendedSpellId = result
-            if db.debugMode then
-                print("[NextCast] Recommended spell:", recommendedSpellId)
+        -- Use cached result if recent (within 100ms)
+        if cachedRecommendedSpell and (currentTime - lastApiCallTime) < API_CACHE_DURATION then
+            recommendedSpellId = cachedRecommendedSpell
+        else
+            -- Call API and cache result
+            local success, result = pcall(C_AssistedCombat.GetNextCastSpell, true)
+            if success and result and type(result) == "number" and result > 0 then
+                recommendedSpellId = result
+                cachedRecommendedSpell = result
+                lastApiCallTime = currentTime
+                if db.debugMode then
+                    print("[NextCast] API call - Recommended spell:", recommendedSpellId)
+                end
+            else
+                cachedRecommendedSpell = nil
+                lastApiCallTime = currentTime
+                if db.debugMode then
+                    print("[NextCast] API call - No spell recommended")
+                end
             end
-        elseif db.debugMode then
-            print("[NextCast] No spell recommended by C_AssistedCombat")
         end
-    elseif db.debugMode then
+    elseif db.debugMode and cachedRecommendedSpell == nil then
         print("[NextCast] C_AssistedCombat API not available")
+        cachedRecommendedSpell = false  -- Mark as checked to avoid spam
     end
 
     local texture, keybind = nil, nil

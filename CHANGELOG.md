@@ -2,6 +2,12 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.0.4] - 2026-01-29
+
+### Performance
+- Added short-lived caching for C_AssistedCombat recommendations to prevent API spam
+- Reduced update-call thrashing to eliminate latency spikes
+
 ## [1.0.3] - 2026-01-29
 
 ### Bug Fix - Critical
