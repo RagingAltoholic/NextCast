@@ -85,14 +85,11 @@ function Tracker:Initialize()
     self.frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
     self.frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
     self.frame:RegisterEvent("UPDATE_BINDINGS")
-    self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
-    self.frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
     self.frame:RegisterEvent("ACTIONBAR_UPDATE_STATE")
     self.frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     self.frame:SetScript("OnEvent", function(_, event, ...) self:OnEvent(event, ...) end)
 
     self.buttons = BuildButtonList()
-    self.activeSpells = {}
     self.lastUpdate = 0
     self.frame:SetScript("OnUpdate", function(_, elapsed)
         self.lastUpdate = self.lastUpdate + elapsed
@@ -106,18 +103,6 @@ function Tracker:Initialize()
 end
 
 function Tracker:OnEvent(event, ...)
-    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
-        local spellId = ...
-        if spellId then
-            self.activeSpells[spellId] = true
-        end
-    elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
-        local spellId = ...
-        if spellId then
-            self.activeSpells[spellId] = nil
-        end
-    end
-
     self:Update()
 end
 
@@ -153,9 +138,6 @@ function Tracker:Update()
 
     local texture, keybind = nil, nil
     local cooldownStart, cooldownDuration, cooldownEnabled
-    local hasActive = next(self.activeSpells) ~= nil
-    local glowFound = false
-    local glowType = nil
 
     for _, entry in ipairs(self.buttons) do
         local button = entry.button
@@ -166,32 +148,28 @@ function Tracker:Update()
                 local actionType, id = GetActionInfo(actionId)
                 -- Only show spells, not items/macros/potions
                 if actionType == "spell" and id then
-                    local spellId = id
-
-                    if (not hasActive) or (spellId and self.activeSpells[spellId]) then
-                        if C_Spell and C_Spell.GetSpellTexture then
-                            texture = C_Spell.GetSpellTexture(id)
-                        elseif GetSpellTexture then
-                            texture = GetSpellTexture(id)
-                        end
-
-                        local bindingKey = GetBindingKey(entry.binding)
-                        if bindingKey then
-                            keybind = FormatKeybind(GetBindingText(bindingKey, "KEY_", 1))
-                        end
-
-                        if actionId then
-                            cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(actionId)
-                        elseif button and button.cooldown and button.cooldown.GetCooldownTimes then
-                            local startMS, durationMS = button.cooldown:GetCooldownTimes()
-                            if startMS and durationMS then
-                                cooldownStart = startMS / 1000
-                                cooldownDuration = durationMS / 1000
-                                cooldownEnabled = 1
-                            end
-                        end
-                        break
+                    if C_Spell and C_Spell.GetSpellTexture then
+                        texture = C_Spell.GetSpellTexture(id)
+                    elseif GetSpellTexture then
+                        texture = GetSpellTexture(id)
                     end
+
+                    local bindingKey = GetBindingKey(entry.binding)
+                    if bindingKey then
+                        keybind = FormatKeybind(GetBindingText(bindingKey, "KEY_", 1))
+                    end
+
+                    if actionId then
+                        cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(actionId)
+                    elseif button and button.cooldown and button.cooldown.GetCooldownTimes then
+                        local startMS, durationMS = button.cooldown:GetCooldownTimes()
+                        if startMS and durationMS then
+                            cooldownStart = startMS / 1000
+                            cooldownDuration = durationMS / 1000
+                            cooldownEnabled = 1
+                        end
+                    end
+                    break
                 end
             end
         end
