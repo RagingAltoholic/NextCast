@@ -274,16 +274,11 @@ function UI:ApplySettings()
     local db = NextCast:GetModule("Core").db
     if not db then return end
 
-    local oldScale = self.frame:GetScale()
-    local newScale = db.scale or 1.0
-
-    self.frame:SetScale(newScale)
+    self.frame:SetScale(db.scale or 1.0)
     self.frame:SetAlpha(db.alpha or 1.0)
 
-    if oldScale ~= newScale then
-        ApplyPosition(self.frame, db)
-    end
-
+    -- Always apply position to ensure it's set correctly
+    ApplyPosition(self.frame, db)
     EnsureOnScreen(self.frame)
 
     self.frame.keybind:SetTextHeight(db.keybindFontSize or 12)
