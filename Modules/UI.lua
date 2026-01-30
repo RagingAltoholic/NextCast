@@ -280,8 +280,10 @@ function UI:ApplySettings()
     self.frame:SetScale(newScale)
     self.frame:SetAlpha(db.alpha or 1.0)
 
-    if oldScale ~= newScale then
+    -- Always apply position if it hasn't been set yet, or if scale changed
+    if not self.positionApplied or oldScale ~= newScale then
         ApplyPosition(self.frame, db)
+        self.positionApplied = true
     end
 
     EnsureOnScreen(self.frame)
