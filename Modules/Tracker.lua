@@ -5,7 +5,22 @@ NextCast:NewModule("Tracker", Tracker)
 -- Cache for C_AssistedCombat API result to prevent excessive calls
 local cachedRecommendedSpell = nil
 local lastApiCallTime = 0
-local API_CACHE_DURATION = 0.1  -- Cache API result for 100ms
+local API_CACHE_DURATION = 0.5  -- Cache API result for 500ms (reduce spam)
+
+-- Track glowing spells for fallback detection (procs, ConsolePort, etc.)
+local glowingSpells = {}
+
+-- Track last found spell to reduce spam
+local lastFoundSpell = nil
+local lastFoundTime = 0
+
+-- Hold last displayed spell briefly to prevent flicker
+local lastDisplaySpellId = nil
+local lastDisplayActionId = nil
+local lastDisplayTexture = nil
+local lastDisplayKeybind = nil
+local lastDisplayTime = 0
+local DISPLAY_HOLD_DURATION = 1.5  -- Hold for 1.5s to handle ConsolePort update cycles
 
 
 local function FormatTime(seconds)
@@ -21,13 +36,50 @@ local function FormatTime(seconds)
     end
 end
 
+local MODIFIER_TOKENS = {
+    SHIFT = true,
+    CTRL = true,
+    LCTRL = true,
+    RCTRL = true,
+    ALT = true,
+    LALT = true,
+    RALT = true,
+    CMD = true,
+    META = true,
+    LMETA = true,
+    RMETA = true,
+    WIN = true,
+    LWIN = true,
+    RWIN = true,
+}
+
+local function IsModifierToken(token)
+    return MODIFIER_TOKENS[token] == true
+end
+
 local function FormatKeybind(keybind)
     if not keybind then return "" end
-    -- Remove hyphens from modifiers and uppercase: S-1 -> S1, C-A -> CA, etc.
-    return string.upper(keybind:gsub("%-", ""))
+
+    local text = tostring(keybind)
+    local upper = string.upper(text)
+
+    -- Abbreviate modifier keys: LCTRL/RCTRL -> C, LSHIFT/RSHIFT -> S, LALT/RALT -> A, etc.
+    -- Example: LCTRL-1 -> C1, RSHIFT-2 -> S2, LALT-F1 -> AF1
+    local abbreviated = upper
+    abbreviated = abbreviated:gsub("LCTRL%-", "C-"):gsub("RCTRL%-", "C-"):gsub("CTRL%-", "C-")
+    abbreviated = abbreviated:gsub("LSHIFT%-", "S-"):gsub("RSHIFT%-", "S-"):gsub("SHIFT%-", "S-")
+    abbreviated = abbreviated:gsub("LALT%-", "A-"):gsub("RALT%-", "A-"):gsub("ALT%-", "A-")
+    abbreviated = abbreviated:gsub("LMETA%-", "M-"):gsub("RMETA%-", "M-"):gsub("META%-", "M-")
+    abbreviated = abbreviated:gsub("LWIN%-", "M-"):gsub("RWIN%-", "M-"):gsub("WIN%-", "M-")
+    abbreviated = abbreviated:gsub("CMD%-", "C-")
+
+    -- Now remove all remaining hyphens
+    local result = abbreviated:gsub("%-", "")
+    return result
 end
 
 local function GetActionId(button)
+    -- Try standard action button methods first
     if button.action then return button.action end
     if button.GetPagedID then
         local id = button:GetPagedID()
@@ -35,6 +87,16 @@ local function GetActionId(button)
     end
     local attr = button:GetAttribute("action")
     if attr and attr > 0 then return attr end
+    
+    -- For stance/shapeshift buttons and other special buttons, try to get spell ID directly
+    if button.GetAttribute then
+        local spellID = button:GetAttribute("spell")
+        if spellID and spellID > 0 then
+            -- Return nil for actionId, spellID as second return
+            return nil, spellID
+        end
+    end
+    
     return nil
 end
 
@@ -53,17 +115,25 @@ local function BuildButtonList()
     }
 
     local list = {}
-    for _, bar in ipairs(bars) do
-        for i = 1, (bar.count or 12) do
-            local name = bar.buttonPrefix .. i
+
+    local function AddButtonsFromPrefix(prefix, bindingPrefix, maxCount)
+        local foundCount = 0
+        for i = 1, (maxCount or 12) do
+            local name = prefix .. i
             local button = _G[name]
             if button then
                 list[#list + 1] = {
                     button = button,
-                    binding = bar.bindingPrefix .. i,
+                    binding = bindingPrefix and (bindingPrefix .. i) or nil,
                 }
+                foundCount = foundCount + 1
             end
         end
+        return foundCount
+    end
+
+    for _, bar in ipairs(bars) do
+        AddButtonsFromPrefix(bar.buttonPrefix, bar.bindingPrefix, bar.count)
     end
 
     return list
@@ -101,10 +171,11 @@ function Tracker:Initialize()
     end
 
     self.buttons = BuildButtonList()
+    
     self.lastUpdate = 0
     self.frame:SetScript("OnUpdate", function(_, elapsed)
         self.lastUpdate = self.lastUpdate + elapsed
-        if self.lastUpdate >= 0.15 then
+        if self.lastUpdate >= 0.2 then  -- Reduced from 0.15 to 0.2 (5 FPS instead of 6.67 FPS)
             self.lastUpdate = 0
             self:Update()
         end
@@ -114,6 +185,19 @@ function Tracker:Initialize()
 end
 
 function Tracker:OnEvent(event, ...)
+    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
+        local spellId = ...
+        if spellId then
+            glowingSpells[spellId] = true
+            self:Update()
+        end
+    elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+        local spellId = ...
+        if spellId then
+            glowingSpells[spellId] = nil
+            self:Update()
+        end
+    end
     local inInstance, instanceType = IsInInstance()
     return inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "scenario")
 end
@@ -130,26 +214,15 @@ function Tracker:Update()
 
     local showRecommendation = InCombatLockdown() or db.showOutOfCombat or IsDungeonOrRaid()
 
-    if ui.isUnlocked then
-        ui:SetVisible(true)
-    else
-        ui:SetVisible(showRecommendation)
-    end
-
-    if not showRecommendation then
-        ui:SetSpell(nil, nil)
-        ui:SetCooldown(0, 0, false)
-        ui:SetCooldownText("")
-        return
-    end
-
+    -- Always detect spells, just control visibility
     -- Get the recommended spell from C_AssistedCombat API
     -- Cache result to avoid excessive API calls that cause latency
     local recommendedSpellId = nil
-        local currentTime = GetTime()
+    local currentTime = GetTime()
+    local usingFallback = false
     
     if C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
-        -- Use cached result if recent (within 100ms)
+        -- Use cached result if recent (within 500ms)
         if cachedRecommendedSpell and (currentTime - lastApiCallTime) < API_CACHE_DURATION then
             recommendedSpellId = cachedRecommendedSpell
         else
@@ -159,20 +232,38 @@ function Tracker:Update()
                 recommendedSpellId = result
                 cachedRecommendedSpell = result
                 lastApiCallTime = currentTime
-                if db.debugMode then
-                    print("[NextCast] API call - Recommended spell:", recommendedSpellId)
-                end
+                lastFoundSpell = recommendedSpellId
+                lastFoundTime = currentTime
             else
                 cachedRecommendedSpell = nil
                 lastApiCallTime = currentTime
-                if db.debugMode then
-                    print("[NextCast] API call - No spell recommended")
+            end
+        end
+    end
+    
+    -- Fallback: If Assisted Combat API returns nothing, check for glowing spells only
+    if not recommendedSpellId and next(glowingSpells) then
+        for _, entry in ipairs(self.buttons) do
+            local button = entry.button
+            if button then
+                local actionId, directSpellId = GetActionId(button)
+                -- Check regular action buttons for glowing spells
+                if actionId then
+                    local actionType, spellId = GetActionInfo(actionId)
+                    if actionType == "spell" and spellId and glowingSpells[spellId] then
+                        recommendedSpellId = spellId
+                        usingFallback = true
+                        break
+                    end
+                end
+                -- Also check stance buttons for glowing spells
+                if not actionId and directSpellId and glowingSpells[directSpellId] then
+                    recommendedSpellId = directSpellId
+                    usingFallback = true
+                    break
                 end
             end
         end
-    elseif db.debugMode and cachedRecommendedSpell == nil then
-        print("[NextCast] C_AssistedCombat API not available")
-        cachedRecommendedSpell = false  -- Mark as checked to avoid spam
     end
 
     local texture, keybind = nil, nil
@@ -182,25 +273,56 @@ function Tracker:Update()
     if recommendedSpellId then
         for _, entry in ipairs(self.buttons) do
             local button = entry.button
-            if button and button:IsShown() then
-                local actionId = GetActionId(button)
+            if button then  -- Removed IsShown() check - bars can be hidden but still have keybinds
+                local actionId, directSpellId = GetActionId(button)
+                
+                -- Handle stance buttons that return spell IDs directly
+                if not actionId and directSpellId then
+                    if directSpellId == recommendedSpellId then
+                        if C_Spell and C_Spell.GetSpellTexture then
+                            texture = C_Spell.GetSpellTexture(directSpellId)
+                        elseif GetSpellTexture then
+                            texture = GetSpellTexture(directSpellId)
+                        end
+                        
+                        -- Get keybind
+                        local bindingKey = entry.binding and GetBindingKey(entry.binding)
+                        if bindingKey then
+                            keybind = FormatKeybind(GetBindingText(bindingKey))
+                        end
+                        
+                        -- Cache display info
+                        lastDisplaySpellId = directSpellId
+                        lastDisplayActionId = nil  -- No action ID for stance buttons
+                        lastDisplayTexture = texture
+                        lastDisplayKeybind = keybind
+                        lastDisplayTime = currentTime
+                        break
+                    end
+                end
+                
                 if actionId then
                     local actionType, spellId = GetActionInfo(actionId)
                     -- Only show spells, not items/macros/potions
                     if actionType == "spell" and spellId and spellId == recommendedSpellId then
-                        if db.debugMode then
-                            print("[NextCast] Found spell", spellId, "in button:", entry.binding)
-                        end
-                        
                         if C_Spell and C_Spell.GetSpellTexture then
                             texture = C_Spell.GetSpellTexture(spellId)
                         elseif GetSpellTexture then
                             texture = GetSpellTexture(spellId)
                         end
 
-                        local bindingKey = GetBindingKey(entry.binding)
+                        -- Get keybind from binding
+                        local bindingKey = entry.binding and GetBindingKey(entry.binding)
                         if bindingKey then
-                            keybind = FormatKeybind(GetBindingText(bindingKey, "KEY_", 1))
+                            keybind = FormatKeybind(GetBindingText(bindingKey))
+                        end
+
+                        -- Fallback to button's hotkey text
+                        if (not keybind or keybind == "") and button.HotKey then
+                            local hotkeyText = button.HotKey:GetText()
+                            if hotkeyText and hotkeyText ~= "" and hotkeyText ~= "RANGE_INDICATOR" then
+                                keybind = hotkeyText
+                            end
                         end
 
                         if actionId then
@@ -213,6 +335,12 @@ function Tracker:Update()
                                 cooldownEnabled = 1
                             end
                         end
+                        -- Cache display info to prevent flicker
+                        lastDisplaySpellId = spellId
+                        lastDisplayActionId = actionId
+                        lastDisplayTexture = texture
+                        lastDisplayKeybind = keybind
+                        lastDisplayTime = currentTime
                         break
                     end
                 end
@@ -220,6 +348,34 @@ function Tracker:Update()
         end
     end
 
+    -- If still no texture and we have a recommended spell from the API,
+    -- display it directly (trust the API - it's validated as appropriate)
+    -- This handles stances, procs, and other spells not on action bars
+    if not texture and recommendedSpellId then
+        -- Get texture from spell
+        if C_Spell and C_Spell.GetSpellTexture then
+            texture = C_Spell.GetSpellTexture(recommendedSpellId)
+        elseif GetSpellTexture then
+            texture = GetSpellTexture(recommendedSpellId)
+        end
+    end
+
+    -- If nothing found this frame, keep last display briefly to avoid flicker
+    if not texture and lastDisplaySpellId and (currentTime - lastDisplayTime) <= DISPLAY_HOLD_DURATION then
+        texture = lastDisplayTexture
+        keybind = lastDisplayKeybind
+        if lastDisplayActionId then
+            cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(lastDisplayActionId)
+        end
+    elseif not texture and lastDisplaySpellId then
+        -- Hold buffer expired, clear the cache
+        lastDisplaySpellId = nil
+        lastDisplayActionId = nil
+        lastDisplayTexture = nil
+        lastDisplayKeybind = nil
+    end
+
+    -- Always update spell display (even out of combat)
     ui:SetSpell(texture, keybind)
     ui:SetCooldown(cooldownStart or 0, cooldownDuration or 0, cooldownEnabled == 1)
 
@@ -228,5 +384,12 @@ function Tracker:Update()
         ui:SetCooldownText(FormatTime(remaining), remaining)
     else
         ui:SetCooldownText("")
+    end
+
+    -- Control visibility based on combat/settings
+    if ui.isUnlocked then
+        ui:SetVisible(true)
+    else
+        ui:SetVisible(showRecommendation)
     end
 end

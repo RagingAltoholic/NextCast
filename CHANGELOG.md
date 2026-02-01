@@ -2,6 +2,50 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.0.6] - 2026-02-01
+
+### Added
+- **Fallback spell detection system**: Automatically tracks glowing spells (procs, ability highlights) when Assisted Combat API unavailable
+- **Stance/Form detection**: Properly detects and displays all stance and form spells (Druid forms, Shadowform, Monk stances, etc.)
+- **Spell glow fallback**: Uses SPELL_ACTIVATION_OVERLAY_GLOW events as alternative detection method
+
+### Fixed
+- **Stance form display**: Stance bars now properly display recommended spells without requiring button keybinds
+- **Keybind formatting**: Fixed hyphens between modifiers (LCTRL-1 → C1, LSHIFT-2 → S2)
+- **API call spam**: Increased cache duration from 100ms to 500ms to reduce latency
+- **Spell flickering**: Added 1.5s hold buffer to maintain display during rapid recommendation changes
+- **Hidden action bars**: Removed visibility requirement for spell detection
+- **Out-of-combat detection**: Spell detection now runs continuously; visibility controlled separately
+
+### Changed
+- **Update frequency**: Reduced from 6.67 FPS to 5 FPS (0.2s interval) for better CPU efficiency
+- **API cache duration**: Increased from 100ms to 500ms to prevent excessive API calls
+- **Comprehensive debug logging**: Removed verbose debug output; simplified for production use
+- **Stance form handling**: Now uses generic API-based approach instead of hardcoded spell ID lists
+
+### Technical
+- Primary detection: `C_AssistedCombat.GetNextCastSpell()` API
+- Fallback detection: `SPELL_ACTIVATION_OVERLAY_GLOW_SHOW`/`HIDE` events
+- Texture acquisition: `C_Spell.GetSpellTexture()` (modern API)
+- Keybind system: `GetBindingKey()` and `GetBindingText()` with abbreviation formatter
+- Hold buffer: 1.5 seconds to smooth display transitions
+- Classes tested: Druid (all forms), Priest (Shadowform), coverage for all classes
+- Fallback detection: SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE events (procs, ability procs)
+- Automatically switches between detection methods based on what's available
+
+### Known Limitations
+- None currently identified
+
+### Planned for 1.5.0
+- Full ConsolePort integration with controller keybind display
+- ConsolePort action bar button detection
+- Gamepad icon support
+
+## [1.0.5] - 2026-01-29
+
+### Bug Fix
+- Addon was hidden on intial download unless scaled via the settings
+
 ## [1.0.4] - 2026-01-29
 
 ### Performance
