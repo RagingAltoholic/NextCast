@@ -3,6 +3,33 @@ local _, NextCast = ...
 local SettingsModule = {}
 NextCast:NewModule("Settings", SettingsModule)
 
+------------------------------------------------------------
+-- WoW Font List (Common first, then separator, then rest)
+------------------------------------------------------------
+local FONT_LIST = {
+    -- Common fonts
+    { path = "Fonts\\FRIZQT__.TTF", name = "Friz Quadrata (Default)" },
+    { path = "Fonts\\ARIALN.TTF", name = "Arial Narrow" },
+    { path = "Fonts\\skurri.ttf", name = "Skurri" },
+    { path = "Fonts\\MORPHEUS.TTF", name = "Morpheus" },
+    { path = "separator" },  -- Visual separator
+    -- Additional fonts
+    { path = "Fonts\\FRIZQT___CYR.TTF", name = "Friz Quadrata (Cyrillic)" },
+    { path = "Fonts\\ARIALN_CYR.TTF", name = "Arial Narrow (Cyrillic)" },
+    { path = "Fonts\\2002.TTF", name = "2002" },
+    { path = "Fonts\\2002B.TTF", name = "2002 Bold" },
+    { path = "Fonts\\ARHei.ttf", name = "AR CrystalzcuheiGBK Demibold (zhCN)" },
+    { path = "Fonts\\ARKai_C.ttf", name = "AR ZhongkaiGBK Medium (zhCN)" },
+    { path = "Fonts\\ARKai_T.ttf", name = "AR ZhongkaiBig5 Medium (zhTW)" },
+    { path = "Fonts\\bHEI00M.ttf", name = "BL ZhongHei BD (zhTW)" },
+    { path = "Fonts\\bHEI01B.ttf", name = "BL ZhongHei BD (zhTW)" },
+    { path = "Fonts\\K_Damage.TTF", name = "K_Damage (koKR)" },
+    { path = "Fonts\\K_Pagetext.TTF", name = "K_Pagetext (koKR)" },
+}
+
+------------------------------------------------------------
+-- Helper Functions
+------------------------------------------------------------
 local function OpenColorPicker(initial, callback)
     local r, g, b = initial.r, initial.g, initial.b
 
@@ -27,6 +54,9 @@ local function OpenColorPicker(initial, callback)
     ColorPickerFrame:Show()
 end
 
+------------------------------------------------------------
+-- Tab Panel Creation
+------------------------------------------------------------
 local function CreateOptionsPanel()
     local panel = CreateFrame("Frame", "NextCastOptionsPanel")
     panel.name = "NextCast"
@@ -41,7 +71,9 @@ local function CreateOptionsPanel()
 
     local db = NextCast:GetModule("Core").db
 
-    -- Add preview frame on the right
+    --------------------------------------------------------
+    -- Preview Panel (Right Side - Persistent across tabs)
+    --------------------------------------------------------
     local previewLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     previewLabel:SetPoint("TOPRIGHT", -16, -16)
     previewLabel:SetText("Preview")
@@ -57,7 +89,7 @@ local function CreateOptionsPanel()
     })
     previewBg:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
 
-    -- Create a mini preview button
+    -- Preview button
     local previewBtn = CreateFrame("Button", nil, previewBg)
     previewBtn:SetSize(50, 50)
     previewBtn:SetPoint("CENTER")
@@ -77,52 +109,117 @@ local function CreateOptionsPanel()
     previewKeybind:SetPoint("BOTTOMLEFT", 2, 2)
     previewKeybind:SetTextColor(1, 1, 1)
     previewKeybind:SetText("S1")
-    previewKeybind:SetFont(previewKeybind:GetFont(), db.keybindFontSize or 12, "OUTLINE")
 
     local previewCdText = previewBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     previewCdText:SetPoint("CENTER")
     previewCdText:SetTextColor(1, 0.95, 0.6)
     previewCdText:SetJustifyH("CENTER")
     previewCdText:SetJustifyV("MIDDLE")
-    previewCdText:SetFont(previewCdText:GetFont(), db.cdFontSize or 18, "OUTLINE")
-    previewCdText:SetText("10.0")
 
-    -- Update preview when settings change
+    -- Update preview function
     local function UpdatePreview()
         previewBtn:SetScale(db.scale or 1.0)
         previewBtn:SetAlpha(db.alpha or 1.0)
-        previewKeybind:SetFont(previewKeybind:GetFont(), db.keybindFontSize or 12, "OUTLINE")
-        previewCdText:SetFont(previewCdText:GetFont(), db.cdFontSize or 18, "OUTLINE")
+        
+        -- Apply fonts (with fallback protection)
+        local cdFont = db.cdFontFace or "Fonts\\FRIZQT__.TTF"
+        local kbFont = db.keybindFontFace or "Fonts\\FRIZQT__.TTF"
+        
+        local success1 = pcall(previewKeybind.SetFont, previewKeybind, kbFont, db.keybindFontSize or 12, "OUTLINE")
+        if not success1 then
+            previewKeybind:SetFont("Fonts\\FRIZQT__.TTF", db.keybindFontSize or 12, "OUTLINE")
+        end
+        
+        local success2 = pcall(previewCdText.SetFont, previewCdText, cdFont, db.cdFontSize or 18, "OUTLINE")
+        if not success2 then
+            previewCdText:SetFont("Fonts\\FRIZQT__.TTF", db.cdFontSize or 18, "OUTLINE")
+        end
+        
+        -- Apply colors
+        local kbColor = db.keybindFontColor or { r = 1, g = 1, b = 1 }
+        local cdColor = db.cdFontColor or { r = 1, g = 0.95, b = 0.6 }
+        previewKeybind:SetTextColor(kbColor.r, kbColor.g, kbColor.b)
+        previewCdText:SetTextColor(cdColor.r, cdColor.g, cdColor.b)
+        
+        -- Apply anchor positions
+        previewKeybind:ClearAllPoints()
+        previewCdText:ClearAllPoints()
+        
+        local kbAnchor = db.keybindAnchor or "TOPLEFT"
+        local cdAnchor = db.cdAnchor or "CENTER"
+        
+        -- Keybind anchor (with 2px padding)
+        if kbAnchor == "TOPLEFT" then
+            previewKeybind:SetPoint("TOPLEFT", previewBtn, "TOPLEFT", 2, -2)
+        elseif kbAnchor == "TOP" then
+            previewKeybind:SetPoint("TOP", previewBtn, "TOP", 0, -2)
+        elseif kbAnchor == "TOPRIGHT" then
+            previewKeybind:SetPoint("TOPRIGHT", previewBtn, "TOPRIGHT", -2, -2)
+        elseif kbAnchor == "LEFT" then
+            previewKeybind:SetPoint("LEFT", previewBtn, "LEFT", 2, 0)
+        elseif kbAnchor == "RIGHT" then
+            previewKeybind:SetPoint("RIGHT", previewBtn, "RIGHT", -2, 0)
+        elseif kbAnchor == "BOTTOMLEFT" then
+            previewKeybind:SetPoint("BOTTOMLEFT", previewBtn, "BOTTOMLEFT", 2, 2)
+        elseif kbAnchor == "BOTTOM" then
+            previewKeybind:SetPoint("BOTTOM", previewBtn, "BOTTOM", 0, 2)
+        elseif kbAnchor == "BOTTOMRIGHT" then
+            previewKeybind:SetPoint("BOTTOMRIGHT", previewBtn, "BOTTOMRIGHT", -2, 2)
+        end
+        
+        -- Cooldown text anchor (with 2px padding)
+        if cdAnchor == "CENTER" then
+            previewCdText:SetPoint("CENTER", previewBtn, "CENTER", 0, 0)
+        elseif cdAnchor == "TOPLEFT" then
+            previewCdText:SetPoint("TOPLEFT", previewBtn, "TOPLEFT", 2, -2)
+        elseif cdAnchor == "TOP" then
+            previewCdText:SetPoint("TOP", previewBtn, "TOP", 0, -2)
+        elseif cdAnchor == "TOPRIGHT" then
+            previewCdText:SetPoint("TOPRIGHT", previewBtn, "TOPRIGHT", -2, -2)
+        elseif cdAnchor == "LEFT" then
+            previewCdText:SetPoint("LEFT", previewBtn, "LEFT", 2, 0)
+        elseif cdAnchor == "RIGHT" then
+            previewCdText:SetPoint("RIGHT", previewBtn, "RIGHT", -2, 0)
+        elseif cdAnchor == "BOTTOMLEFT" then
+            previewCdText:SetPoint("BOTTOMLEFT", previewBtn, "BOTTOMLEFT", 2, 2)
+        elseif cdAnchor == "BOTTOM" then
+            previewCdText:SetPoint("BOTTOM", previewBtn, "BOTTOM", 0, 2)
+        elseif cdAnchor == "BOTTOMRIGHT" then
+            previewCdText:SetPoint("BOTTOMRIGHT", previewBtn, "BOTTOMRIGHT", -2, 2)
+        end
+        
+        -- Show/hide elements
         previewKeybind:SetShown(db.showKeybind)
         previewCdText:SetShown(db.showCooldownText)
         previewCd:SetDrawSwipe(db.showCooldownSwipe)
+        
+        -- Update text format based on precision
+        if db.cdShowTenths then
+            previewCdText:SetText("10.2")
+        else
+            previewCdText:SetText("10")
+        end
     end
 
     panel.UpdatePreview = UpdatePreview
 
-    local function CreateCheckbox(label, yOffset, getter, setter)
-        local check = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    --------------------------------------------------------
+    -- Helper Functions for UI Elements
+    --------------------------------------------------------
+    local function CreateCheckbox(parent, label, yOffset, getter, setter)
+        local check = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
         check:SetPoint("TOPLEFT", 16, yOffset)
         check.Text:SetText(label)
         check:SetChecked(getter())
         check:SetScript("OnClick", function(self)
             setter(self:GetChecked())
             UpdatePreview()
-            -- Sync to Edit Mode if available
-            local editMode = NextCast:GetModule("EditMode")
-            if editMode and editMode.checkboxList then
-                for _, chk in ipairs(editMode.checkboxList) do
-                    if chk and chk.getter then
-                        chk:SetChecked(chk.getter())
-                    end
-                end
-            end
         end)
         return check
     end
 
-    local function CreateSlider(label, yOffset, min, max, step, getter, setter)
-        local slider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+    local function CreateSlider(parent, label, yOffset, min, max, step, getter, setter, formatFunc)
+        local slider = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
         slider:SetPoint("TOPLEFT", 16, yOffset)
         slider:SetWidth(260)
         slider:SetMinMaxValues(min, max)
@@ -138,10 +235,11 @@ local function CreateOptionsPanel()
 
         local valueText = slider:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         valueText:SetPoint("TOPRIGHT", slider, "BOTTOMRIGHT", 0, -2)
-        valueText:SetText(string.format("%.2f", getter()))
+        local format = formatFunc or function(v) return string.format("%.2f", v) end
+        valueText:SetText(format(getter()))
 
         slider:SetScript("OnValueChanged", function(self, value)
-            valueText:SetText(string.format("%.2f", value))
+            valueText:SetText(format(value))
             setter(value)
             UpdatePreview()
         end)
@@ -149,8 +247,8 @@ local function CreateOptionsPanel()
         return slider
     end
 
-    local function CreateColorButton(label, yOffset, getter, setter)
-        local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local function CreateColorButton(parent, label, yOffset, getter, setter)
+        local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
         btn:SetPoint("TOPLEFT", 16, yOffset)
         btn:SetSize(160, 22)
         btn:SetText(label)
@@ -176,80 +274,434 @@ local function CreateOptionsPanel()
         return btn
     end
 
-    local yPos = -70
+    local function CreateAnchorSelector(parent, label, yOffset, getter, setter, allowCenter)
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetPoint("TOPLEFT", 16, yOffset)
+        container:SetSize(260, 110)
 
-    CreateCheckbox("Enable NextCast", yPos,
+        -- Label
+        local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        labelText:SetPoint("TOPLEFT", 0, 0)
+        labelText:SetText(label)
+
+        -- Anchor grid (3x3 grid with optional center)
+        local anchorFrame = CreateFrame("Frame", nil, container, "BackdropTemplate")
+        anchorFrame:SetPoint("TOPLEFT", 0, -20)
+        anchorFrame:SetSize(90, 90)
+        anchorFrame:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = false, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        anchorFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        anchorFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+        -- Anchor points mapping
+        local anchors = {
+            { point = "TOPLEFT", x = 5, y = -5, row = 1, col = 1 },
+            { point = "TOP", x = 37, y = -5, row = 1, col = 2 },
+            { point = "TOPRIGHT", x = 69, y = -5, row = 1, col = 3 },
+            { point = "LEFT", x = 5, y = -37, row = 2, col = 1 },
+            { point = "CENTER", x = 37, y = -37, row = 2, col = 2 },
+            { point = "RIGHT", x = 69, y = -37, row = 2, col = 3 },
+            { point = "BOTTOMLEFT", x = 5, y = -69, row = 3, col = 1 },
+            { point = "BOTTOM", x = 37, y = -69, row = 3, col = 2 },
+            { point = "BOTTOMRIGHT", x = 69, y = -69, row = 3, col = 3 },
+        }
+
+        local buttons = {}
+        for _, anchor in ipairs(anchors) do
+            -- Skip CENTER if not allowed
+            if allowCenter or anchor.point ~= "CENTER" then
+                local btn = CreateFrame("Button", nil, anchorFrame)
+                btn:SetPoint("TOPLEFT", anchorFrame, "TOPLEFT", anchor.x, anchor.y)
+                btn:SetSize(16, 16)
+                
+                -- Background
+                local bg = btn:CreateTexture(nil, "BACKGROUND")
+                bg:SetAllPoints()
+                bg:SetColorTexture(0.3, 0.3, 0.3, 0.8)
+                btn.bg = bg
+                
+                -- Selection highlight
+                local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+                highlight:SetAllPoints()
+                highlight:SetColorTexture(0.5, 0.5, 0.5, 0.5)
+                
+                -- Selected indicator
+                local selected = btn:CreateTexture(nil, "OVERLAY")
+                selected:SetAllPoints()
+                selected:SetColorTexture(0.2, 0.8, 0.2, 1.0)
+                selected:Hide()
+                btn.selected = selected
+                
+                btn.anchorPoint = anchor.point
+                btn:SetScript("OnClick", function(self)
+                    setter(self.anchorPoint)
+                    -- Update selection visual
+                    for _, b in ipairs(buttons) do
+                        b.selected:Hide()
+                    end
+                    self.selected:Show()
+                    UpdatePreview()
+                end)
+                
+                table.insert(buttons, btn)
+            end
+        end
+
+        -- Set initial selection
+        local currentAnchor = getter()
+        for _, btn in ipairs(buttons) do
+            if btn.anchorPoint == currentAnchor then
+                btn.selected:Show()
+                break
+            end
+        end
+
+        -- Description text
+        local desc = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        desc:SetPoint("LEFT", anchorFrame, "RIGHT", 10, 0)
+        desc:SetWidth(150)
+        desc:SetJustifyH("LEFT")
+        desc:SetText("Click a point to position text")
+
+        return container
+    end
+
+    local function CreateFontDropdown(parent, label, yOffset, getter, setter)
+        -- Check if UIDropDownMenu API exists (may be deprecated in future)
+        if not UIDropDownMenu_Initialize then
+            -- Fallback: Create a simple text label showing current font
+            local container = CreateFrame("Frame", nil, parent)
+            container:SetPoint("TOPLEFT", 16, yOffset)
+            container:SetSize(260, 30)
+            
+            local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            labelText:SetPoint("TOPLEFT", 0, 0)
+            labelText:SetText(label .. " (dropdown unavailable)")
+            labelText:SetTextColor(1, 0.5, 0)
+            
+            return container
+        end
+        
+        local dropdown = CreateFrame("Frame", "NextCastFontDropdown_" .. label, parent, "UIDropDownMenuTemplate")
+        dropdown:SetPoint("TOPLEFT", -4, yOffset)
+        
+        local labelText = dropdown:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        labelText:SetPoint("BOTTOMLEFT", dropdown, "TOPLEFT", 20, 2)
+        labelText:SetText(label)
+
+        UIDropDownMenu_SetWidth(dropdown, 200)
+        
+        local function OnClick(self)
+            UIDropDownMenu_SetSelectedID(dropdown, self:GetID())
+            setter(self.value)
+            UpdatePreview()
+        end
+
+        local function initialize(self, level)
+            local info = UIDropDownMenu_CreateInfo()
+            for i, fontData in ipairs(FONT_LIST) do
+                if fontData.path == "separator" then
+                    info.text = "-------------------"
+                    info.disabled = true
+                    info.notClickable = true
+                    UIDropDownMenu_AddButton(info, level)
+                else
+                    info.text = fontData.name
+                    info.value = fontData.path
+                    info.func = OnClick
+                    info.disabled = false
+                    info.notClickable = false
+                    info.checked = (getter() == fontData.path)
+                    UIDropDownMenu_AddButton(info, level)
+                end
+            end
+        end
+
+        UIDropDownMenu_Initialize(dropdown, initialize)
+        
+        -- Set initial display text
+        for i, fontData in ipairs(FONT_LIST) do
+            if fontData.path == getter() then
+                UIDropDownMenu_SetText(dropdown, fontData.name)
+                break
+            end
+        end
+
+        return dropdown
+    end
+
+    --------------------------------------------------------
+    -- Create Tab System (Custom - no template dependencies)
+    --------------------------------------------------------
+    local TAB_GENERAL = 1
+    local TAB_COOLDOWN = 2
+    local TAB_KEYBIND = 3
+    local TAB_WARNING = 4
+
+    local tabs = {}
+    local tabContents = {}
+    local activeTab = 1
+
+    -- Create tabs without template (positioned within panel bounds)
+    for i = 1, 4 do
+        local tab = CreateFrame("Button", "NextCastTab" .. i, panel)
+        tab:SetID(i)
+        tab:SetSize(110, 28)
+        
+        -- Tab background (normal state)
+        local bg = tab:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+        tab.bg = bg
+        
+        -- Tab text
+        local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        text:SetPoint("CENTER")
+        text:SetText(({ "General", "Cooldown", "Keybind", "Warning" })[i])
+        tab.text = text
+        
+        -- Selection highlight
+        local highlight = tab:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+        
+        -- Tab click handler
+        tab:SetScript("OnClick", function(self)
+            activeTab = self:GetID()
+            -- Update tab visuals
+            for j = 1, 4 do
+                if tabs[j] then
+                    if j == activeTab then
+                        tabs[j].bg:SetColorTexture(0.3, 0.3, 0.3, 1.0)
+                        tabs[j].text:SetTextColor(1, 1, 1)
+                    else
+                        tabs[j].bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+                        tabs[j].text:SetTextColor(0.7, 0.7, 0.7)
+                    end
+                end
+                -- Update content visibility
+                if tabContents[j] then
+                    tabContents[j]:SetShown(j == activeTab)
+                end
+            end
+        end)
+        
+        -- Position tabs inside panel below the subtitle
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -60)
+        else
+            tab:SetPoint("LEFT", tabs[i-1], "RIGHT", 4, 0)
+        end
+        
+        tabs[i] = tab
+    end
+
+    -- Set initial active tab
+    if tabs[1] then
+        tabs[1].bg:SetColorTexture(0.3, 0.3, 0.3, 1.0)
+        tabs[1].text:SetTextColor(1, 1, 1)
+    end
+
+    --------------------------------------------------------
+    -- TAB 1: GENERAL
+    --------------------------------------------------------
+    tabContents[1] = CreateFrame("Frame", nil, panel)
+    tabContents[1]:SetPoint("TOPLEFT", 10, -100)
+    tabContents[1]:SetPoint("BOTTOMRIGHT", previewBg, "BOTTOMLEFT", -20, 0)
+    
+    local yPos = -10
+    CreateCheckbox(tabContents[1], "Enable NextCast", yPos,
         function() return db.enabled end,
         function(v) db.enabled = v; NextCast:GetModule("Tracker"):Update() end)
     yPos = yPos - 25
 
-    CreateCheckbox("Show out of combat", yPos,
+    CreateCheckbox(tabContents[1], "Show out of combat", yPos,
         function() return db.showOutOfCombat end,
         function(v) db.showOutOfCombat = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 35
+
+    -- Hide conditions section
+    local hideLabel = tabContents[1]:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    hideLabel:SetPoint("TOPLEFT", 16, yPos)
+    hideLabel:SetText("Hide Conditions")
     yPos = yPos - 25
 
-    CreateCheckbox("Show cooldown swipe", yPos,
-        function() return db.showCooldownSwipe end,
-        function(v) db.showCooldownSwipe = v; NextCast:GetModule("UI"):ApplySettings() end)
+    CreateCheckbox(tabContents[1], "Hide when mounted", yPos,
+        function() return db.hideWhenMounted end,
+        function(v) db.hideWhenMounted = v; NextCast:GetModule("Tracker"):Update() end)
     yPos = yPos - 25
 
-    CreateCheckbox("Show cooldown text", yPos,
-        function() return db.showCooldownText end,
-        function(v) db.showCooldownText = v; NextCast:GetModule("UI"):ApplySettings() end)
+    CreateCheckbox(tabContents[1], "Hide when in vehicle", yPos,
+        function() return db.hideWhenInVehicle end,
+        function(v) db.hideWhenInVehicle = v; NextCast:GetModule("Tracker"):Update() end)
     yPos = yPos - 25
 
-    CreateCheckbox("Show keybind", yPos,
-        function() return db.showKeybind end,
-        function(v) db.showKeybind = v; NextCast:GetModule("UI"):ApplySettings() end)
+    CreateCheckbox(tabContents[1], "Hide when possessed", yPos,
+        function() return db.hideWhenPossessed end,
+        function(v) db.hideWhenPossessed = v; NextCast:GetModule("Tracker"):Update() end)
     yPos = yPos - 45
 
-    CreateSlider("Scale", yPos, 0.5, 2.0, 0.05,
+    -- Display section
+    local displayLabel = tabContents[1]:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    displayLabel:SetPoint("TOPLEFT", 16, yPos)
+    displayLabel:SetText("Display")
+    yPos = yPos - 35
+
+    CreateSlider(tabContents[1], "Scale", yPos, 0.5, 2.0, 0.05,
         function() return db.scale end,
         function(v) db.scale = v; NextCast:GetModule("UI"):ApplySettings() end)
     yPos = yPos - 50
 
-    CreateSlider("Opacity", yPos, 0.2, 1.0, 0.05,
+    CreateSlider(tabContents[1], "Opacity", yPos, 0.2, 1.0, 0.05,
         function() return db.alpha end,
         function(v) db.alpha = v; NextCast:GetModule("UI"):ApplySettings() end)
-    yPos = yPos - 50
 
-    CreateSlider("Cooldown font size", yPos, 10, 32, 1,
+    --------------------------------------------------------
+    -- TAB 2: COOLDOWN
+    --------------------------------------------------------
+    tabContents[2] = CreateFrame("Frame", nil, panel)
+    tabContents[2]:SetPoint("TOPLEFT", 10, -100)
+    tabContents[2]:SetPoint("BOTTOMRIGHT", previewBg, "BOTTOMLEFT", -20, 0)
+    tabContents[2]:Hide()
+    
+    yPos = -10
+    CreateCheckbox(tabContents[2], "Show cooldown swipe", yPos,
+        function() return db.showCooldownSwipe end,
+        function(v) db.showCooldownSwipe = v; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[2], "Show cooldown text", yPos,
+        function() return db.showCooldownText end,
+        function(v) db.showCooldownText = v; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[2], "Show tenths of a second", yPos,
+        function() return db.cdShowTenths end,
+        function(v) db.cdShowTenths = v; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 45
+
+    CreateFontDropdown(tabContents[2], "Cooldown font", yPos,
+        function() return db.cdFontFace end,
+        function(v) db.cdFontFace = v; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 55
+
+    CreateSlider(tabContents[2], "Cooldown font size", yPos, 10, 32, 1,
         function() return db.cdFontSize end,
-        function(v) db.cdFontSize = v; NextCast:GetModule("UI"):ApplySettings() end)
+        function(v) db.cdFontSize = v; NextCast:GetModule("UI"):ApplySettings() end,
+        function(v) return string.format("%.0f", v) end)
     yPos = yPos - 50
 
-    CreateSlider("Keybind font size", yPos, 8, 20, 1,
-        function() return db.keybindFontSize end,
-        function(v) db.keybindFontSize = v; NextCast:GetModule("UI"):ApplySettings() end)
+    CreateColorButton(tabContents[2], "Cooldown text color", yPos,
+        function() return db.cdFontColor end,
+        function(c) db.cdFontColor = c; NextCast:GetModule("UI"):ApplySettings() end)
     yPos = yPos - 40
 
-    CreateCheckbox("Cooldown warning", yPos,
+    -- v1.1.0: Anchor position selector
+    CreateAnchorSelector(tabContents[2], "Text position", yPos,
+        function() return db.cdAnchor end,
+        function(v) db.cdAnchor = v; NextCast:GetModule("UI"):ApplySettings() end,
+        true)  -- Allow CENTER for cooldown
+
+    --------------------------------------------------------
+    -- TAB 3: KEYBIND
+    --------------------------------------------------------
+    tabContents[3] = CreateFrame("Frame", nil, panel)
+    tabContents[3]:SetPoint("TOPLEFT", 10, -100)
+    tabContents[3]:SetPoint("BOTTOMRIGHT", previewBg, "BOTTOMLEFT", -20, 0)
+    tabContents[3]:Hide()
+    
+    yPos = -10
+    CreateCheckbox(tabContents[3], "Show keybind", yPos,
+        function() return db.showKeybind end,
+        function(v) db.showKeybind = v; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 45
+
+    CreateFontDropdown(tabContents[3], "Keybind font", yPos,
+        function() return db.keybindFontFace end,
+        function(v) db.keybindFontFace = v; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 55
+
+    CreateSlider(tabContents[3], "Keybind font size", yPos, 8, 20, 1,
+        function() return db.keybindFontSize end,
+        function(v) db.keybindFontSize = v; NextCast:GetModule("UI"):ApplySettings() end,
+        function(v) return string.format("%.0f", v) end)
+    yPos = yPos - 50
+
+    CreateColorButton(tabContents[3], "Keybind text color", yPos,
+        function() return db.keybindFontColor end,
+        function(c) db.keybindFontColor = c; NextCast:GetModule("UI"):ApplySettings() end)
+    yPos = yPos - 40
+
+    -- v1.1.0: Anchor position selector
+    CreateAnchorSelector(tabContents[3], "Text position", yPos,
+        function() return db.keybindAnchor end,
+        function(v) 
+            db.keybindAnchor = v
+            NextCast:GetModule("UI"):ApplySettings()
+            -- Update collision warning
+            if warningText then
+                if db.cdAnchor == db.keybindAnchor then
+                    warningText:Show()
+                else
+                    warningText:Hide()
+                end
+            end
+        end,
+        false)  -- No CENTER for keybind
+    yPos = yPos - 120
+
+    -- Collision warning
+    local warningText = tabContents[3]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    warningText:SetPoint("TOPLEFT", 16, yPos)
+    warningText:SetWidth(260)
+    warningText:SetJustifyH("LEFT")
+    warningText:SetTextColor(1.0, 0.5, 0.0)
+    warningText:SetText("|cFFFF8800Warning:|r Cooldown and Keybind are using the same position. This may cause readability issues. Consider positioning them separately.")
+    warningText:SetWordWrap(true)
+    -- Show/hide based on anchor collision
+    if db.cdAnchor == db.keybindAnchor then
+        warningText:Show()
+    else
+        warningText:Hide()
+    end
+
+    --------------------------------------------------------
+    -- TAB 4: WARNING
+    --------------------------------------------------------
+    tabContents[4] = CreateFrame("Frame", nil, panel)
+    tabContents[4]:SetPoint("TOPLEFT", 10, -100)
+    tabContents[4]:SetPoint("BOTTOMRIGHT", previewBg, "BOTTOMLEFT", -20, 0)
+    tabContents[4]:Hide()
+    
+    yPos = -10
+    CreateCheckbox(tabContents[4], "Enable cooldown warning", yPos,
         function() return db.cdWarningEnabled end,
         function(v) db.cdWarningEnabled = v end)
     yPos = yPos - 50
 
-    CreateSlider("Warning threshold", yPos, 1, 5, 1,
+    CreateSlider(tabContents[4], "Warning threshold (seconds)", yPos, 1, 5, 1,
         function() return db.cdWarningThreshold end,
-        function(v) db.cdWarningThreshold = v end)
-    yPos = yPos - 45
+        function(v) db.cdWarningThreshold = v end,
+        function(v) return string.format("%.0f", v) end)
+    yPos = yPos - 50
 
-    CreateColorButton("Cooldown text color", yPos,
-        function() return db.cdFontColor end,
-        function(c) db.cdFontColor = c; NextCast:GetModule("UI"):ApplySettings() end)
-    yPos = yPos - 30
-
-    CreateColorButton("Keybind text color", yPos,
-        function() return db.keybindFontColor end,
-        function(c) db.keybindFontColor = c; NextCast:GetModule("UI"):ApplySettings() end)
-    yPos = yPos - 30
-
-    CreateColorButton("Warning text color", yPos,
+    CreateColorButton(tabContents[4], "Warning text color", yPos,
         function() return db.cdWarningColor end,
         function(c) db.cdWarningColor = c; NextCast:GetModule("UI"):ApplySettings() end)
 
+    --------------------------------------------------------
+    -- Default Settings Function
+    --------------------------------------------------------
     panel.default = function()
         db.enabled = true
-        db.showOutOfCombat = false
+        db.showOutOfCombat = true
+        db.hideWhenMounted = false
+        db.hideWhenInVehicle = false
+        db.hideWhenPossessed = false
         db.showCooldownSwipe = true
         db.showCooldownText = true
         db.showKeybind = true
@@ -259,15 +711,25 @@ local function CreateOptionsPanel()
         db.cdWarningColor = { r = 1.0, g = 0.0, b = 0.0 }
         db.cdFontSize = 18
         db.cdFontColor = { r = 1.0, g = 0.95, b = 0.6 }
+        db.cdFontFace = "Fonts\\FRIZQT__.TTF"
+        db.cdAnchor = "CENTER"  -- v1.1.0
         db.keybindFontSize = 12
         db.keybindFontColor = { r = 1.0, g = 1.0, b = 1.0 }
+        db.keybindFontFace = "Fonts\\FRIZQT__.TTF"
+        db.keybindAnchor = "TOPLEFT"  -- v1.1.0
+        db.cdShowTenths = true
+        db.cdWarningEnabled = true
         NextCast:GetModule("UI"):ApplySettings()
         NextCast:GetModule("Tracker"):Update()
+        UpdatePreview()
     end
 
     return panel
 end
 
+------------------------------------------------------------
+-- Module Initialization
+------------------------------------------------------------
 function SettingsModule:Initialize()
     if self.initialized then return end
     self.initialized = true
@@ -276,13 +738,18 @@ function SettingsModule:Initialize()
     if not db then return end
 
     self.panel = CreateOptionsPanel()
+    
     if InterfaceOptions_AddCategory then
         InterfaceOptions_AddCategory(self.panel)
     elseif Settings and Settings.RegisterCanvasLayoutCategory then
         local category = Settings.RegisterCanvasLayoutCategory(self.panel, self.panel.name)
         Settings.RegisterAddOnCategory(category)
+        self.category = category
     end
 
+    --------------------------------------------------------
+    -- Slash Commands
+    --------------------------------------------------------
     SLASH_NextCast1 = "/NextCast"
     SlashCmdList.NextCast = function(msg)
         local parts = {}
@@ -292,6 +759,7 @@ function SettingsModule:Initialize()
         
         local cmd = (parts[1] or ""):lower()
         local arg = parts[2] or ""
+        
         if cmd == "on" then
             db.enabled = true
             print("NextCast: Enabled")
@@ -311,73 +779,22 @@ function SettingsModule:Initialize()
         elseif cmd == "debug" then
             db.debugMode = not db.debugMode
             print("NextCast: Debug mode - " .. (db.debugMode and "ON" or "OFF"))
-        elseif cmd == "inspect" then
-            local tracker = NextCast:GetModule("Tracker")
-            if tracker and tracker.buttons then
-                print("NextCast: Inspecting buttons (showing only those with highlights)...")
-                local foundAny = false
-                for i, entry in ipairs(tracker.buttons) do
-                    local btn = entry.button
-                    if btn and btn:IsShown() then
-                        local hasHighlight = (btn.overlay and btn.overlay:IsShown()) or 
-                                            (btn.ActionButtonOverlay and btn.ActionButtonOverlay:IsShown()) or
-                                            (btn.SpellActivationAlert and btn.SpellActivationAlert:IsShown())
-                        if hasHighlight then
-                            foundAny = true
-                            local btnName = btn:GetName() or "unknown"
-                            print(string.format("Button: %s (%s)", btnName, entry.binding or "?"))
-                            if btn.overlay then print(string.format("  overlay: exists, shown=%s", btn.overlay:IsShown() and "YES" or "no")) end
-                            if btn.ActionButtonOverlay then print(string.format("  ActionButtonOverlay: exists, shown=%s", btn.ActionButtonOverlay:IsShown() and "YES" or "no")) end
-                            if btn.SpellActivationAlert then print(string.format("  SpellActivationAlert: exists, shown=%s", btn.SpellActivationAlert:IsShown() and "YES" or "no")) end
-                        end
-                    end
-                end
-                if not foundAny then
-                    print("NextCast: No buttons with highlights found. Make sure you're in combat with Assisted Combat enabled.")
-                end
-            end
-        elseif cmd == "check" and arg ~= "" then
-            local btn = _G[arg]
-            if btn then
-                print(string.format("NextCast: Checking %s", arg))
-                print(string.format("  Shown: %s", btn:IsShown() and "YES" or "no"))
-                print(string.format("  overlay: %s", btn.overlay and "exists" or "nil"))
-                if btn.overlay then 
-                    print(string.format("    shown: %s", btn.overlay:IsShown() and "YES" or "no"))
-                    print(string.format("    name: %s", btn.overlay:GetName() or "no name"))
-                    print(string.format("    objType: %s", btn.overlay:GetObjectType()))
-                end
-                print(string.format("  ActionButtonOverlay: %s", btn.ActionButtonOverlay and "exists" or "nil"))
-                if btn.ActionButtonOverlay then print(string.format("    shown: %s", btn.ActionButtonOverlay:IsShown() and "YES" or "no")) end
-                print(string.format("  SpellActivationAlert: %s", btn.SpellActivationAlert and "exists" or "nil"))
-                if btn.SpellActivationAlert then print(string.format("    shown: %s", btn.SpellActivationAlert:IsShown() and "YES" or "no")) end
-                -- Check for children
-                local children = {btn:GetChildren()}
-                print(string.format("  Children: %d", #children))
-                for i, child in ipairs(children) do
-                    local childName = child:GetName() or "unnamed"
-                    local shown = child:IsShown() and "shown" or "hidden"
-                    print(string.format("    [%d] %s (%s) - %s", i, childName, child:GetObjectType(), shown))
-                end
-            else
-                print(string.format("NextCast: Button '%s' not found", arg))
-            end
         elseif cmd == "config" or cmd == "settings" or cmd == "" then
-            if Settings and Settings.OpenToCategory then
-                Settings.OpenToCategory("NextCast")
+            if Settings and Settings.OpenToCategory and self.category then
+                -- Modern API: Use stored category's numeric ID
+                Settings.OpenToCategory(self.category.ID)
             elseif InterfaceOptionsFrame_OpenToCategory then
+                -- Legacy API: Use panel object
                 InterfaceOptionsFrame_OpenToCategory(self.panel)
                 InterfaceOptionsFrame_OpenToCategory(self.panel)
             end
         else
-            print("NextCast v1.0.0")
-            print("/NextCast on|off - Enable/disable addon")
-            print("/NextCast combat - Toggle show out of combat")
-            print("/NextCast debug - Toggle debug mode")
-            print("/NextCast resetpos - Reset position")
-            print("/NextCast inspect - Show buttons with highlights")
-            print("/NextCast check <ButtonName> - Inspect specific button (e.g., ActionButton2)")
-            print("/NextCast config - Open settings")
+            print("NextCast v1.1.0")
+            print("/nextcast on|off - Enable/disable addon")
+            print("/nextcast combat - Toggle show out of combat")
+            print("/nextcast debug - Toggle debug mode")
+            print("/nextcast resetpos - Reset position")
+            print("/nextcast config - Open settings")
         end
     end
 end

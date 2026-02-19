@@ -5,25 +5,16 @@ NextCast - Edit Mode Module
 Handles integration with Blizzard's Edit Mode system.
 
 This module provides:
-- Settings dialog window (opened by clicking button in Edit Mode)
-- All configuration options (mirrors Options panel)
+- Compact basic settings dialog (default)
+- "Advanced Options" checkbox that expands to show full tabbed interface
+- All settings accessible within Edit Mode (no external panels needed)
 - Auto-lock/unlock behavior when entering/exiting Edit Mode
-- Active state tracking
 
-The settings dialog is movable and shows:
-- Enable/disable toggle
-- Combat visibility
-- Cooldown display options  
-- Scale and opacity sliders
-- Font size sliders
-- Warning threshold settings
-- Color pickers
-- Reset position button
+UI States:
+- Compact (500x320): Basic settings only
+- Expanded (720x560): Full tabbed interface (General, Cooldown, Keybind, Warning)
 
-Edit Mode behavior:
-- Entering Edit Mode: unlocks button, shows selection border
-- Clicking button: opens settings dialog
-- Exiting Edit Mode: locks button, hides selection border, closes dialog
+This eliminates the need for external Settings panel access and prevents all taint issues.
 ==================================================================================
 --]]
 
@@ -32,88 +23,40 @@ local _, NextCast = ...
 local EditMode = {}
 NextCast:NewModule("EditMode", EditMode)
 
-------------------------------------------------------------
--- Edit Mode State
-------------------------------------------------------------
--- Tracks whether Edit Mode is currently active
--- Used by UI module to determine click behavior
 EditMode.active = false
 
 ------------------------------------------------------------
--- Color Picker Helper
+-- WoW Font List (for dropdowns)
 ------------------------------------------------------------
-
---[[
-    OpenColorPicker(initial, callback)
-    
-    Opens Blizzard's color picker dialog.
-    
-    Parameters:
-        initial (table): { r, g, b } - Starting color values (0-1 range)
-        callback (function): Called with new color table when changed
-    
-    The color picker provides:
-    - Visual color selector
-    - RGB adjustment
-    - Cancel button (restores previous color)
-    - Immediate feedback as user drags
---]]
-local function OpenColorPicker(initial, callback)
-    local r, g, b = initial.r, initial.g, initial.b
-
-    local function onColorChange()
-        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
-        callback({ r = nr, g = ng, b = nb })
-    end
-
-    local function onCancel(prev)
-        if prev then
-            callback({ r = prev.r, g = prev.g, b = prev.b })
-        end
-    end
-
-    ColorPickerFrame.hasOpacity = false
-    ColorPickerFrame.previousValues = { r = r, g = g, b = b }
-    ColorPickerFrame.func = onColorChange
-    ColorPickerFrame.cancelFunc = onCancel
-
-    if ColorPickerFrame.Content and ColorPickerFrame.Content.ColorPicker then
-        ColorPickerFrame.Content.ColorPicker:SetColorRGB(r, g, b)
-    end
-
-    ColorPickerFrame:Show()
-end
+local FONT_LIST = {
+    { path = "Fonts\\FRIZQT__.TTF", name = "Friz Quadrata (Default)" },
+    { path = "Fonts\\ARIALN.TTF", name = "Arial Narrow" },
+    { path = "Fonts\\skurri.ttf", name = "Skurri" },
+    { path = "Fonts\\MORPHEUS.TTF", name = "Morpheus" },
+    { path = "separator" },
+    { path = "Fonts\\FRIZQT___CYR.TTF", name = "Friz Quadrata (Cyrillic)" },
+    { path = "Fonts\\ARIALN_CYR.TTF", name = "Arial Narrow (Cyrillic)" },
+    { path = "Fonts\\2002.TTF", name = "2002" },
+    { path = "Fonts\\2002B.TTF", name = "2002 Bold" },
+    { path = "Fonts\\ARHei.ttf", name = "AR CrystalzcuheiGBK Demibold (zhCN)" },
+    { path = "Fonts\\ARKai_C.ttf", name = "AR ZhongkaiGBK Medium (zhCN)" },
+    { path = "Fonts\\ARKai_T.ttf", name = "AR ZhongkaiBig5 Medium (zhTW)" },
+    { path = "Fonts\\bHEI00M.ttf", name = "BL ZhongHei BD (zhTW)" },
+    { path = "Fonts\\bHEI01B.ttf", name = "BL ZhongHei BD (zhTW)" },
+    { path = "Fonts\\K_Damage.TTF", name = "K_Damage (koKR)" },
+    { path = "Fonts\\K_Pagetext.TTF", name = "K_Pagetext (koKR)" },
+}
 
 ------------------------------------------------------------
 -- Settings Window Construction
 ------------------------------------------------------------
-
---[[
-    CreateEditModeSettings()
-    
-    Builds the settings dialog window shown in Edit Mode.
-    
-    This creates a movable 330x680px dialog with:
-    - Title and category labels
-    - 6 checkboxes (enable, combat, swipe, text, keybind, warning)
-    - 6 sliders (scale, opacity, cd font, kb font, warning threshold)
-    - 3 color pickers (cd color, kb color, warning color)
-    - Reset position button
-    
-    All settings immediately apply when changed.
-    Settings are stored in checkboxList, sliderList, and colorList
-    for syncing when dialog opens.
-    
-    Returns:
-        settings (Frame): The constructed settings dialog
---]]
 local function CreateEditModeSettings()
     local db = NextCast:GetModule("Core").db
     local ui = NextCast:GetModule("UI")
 
-    -- Main dialog frame (BackdropTemplate for border/background)
+    -- Main dialog frame
     local settings = CreateFrame("Frame", "NextCastEditModeSettings", UIParent, "BackdropTemplate")
-    settings:SetSize(330, 680)
+    settings:SetSize(500, 320)  -- Compact by default
     settings:SetPoint("CENTER")
     settings:SetFrameStrata("DIALOG")  -- Above game UI
     settings:SetBackdrop({
@@ -131,82 +74,71 @@ local function CreateEditModeSettings()
     settings:SetScript("OnDragStop", settings.StopMovingOrSizing)
 
     --------------------------------------------------------
-    -- Title + Category Label
+    -- Title (Left-justified)
     --------------------------------------------------------
     local title = settings:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", 0, -15)
-    title:SetFont("Fonts\\FRIZQT__.TTF", 21, "OUTLINE")
+    title:SetPoint("TOPLEFT", 20, -20)
+    title:SetFont("Fonts\\FRIZQT__.TTF", 18, "OUTLINE")
     title:SetText("NextCast Settings")
     title:SetTextColor(1, 1, 1)
 
-    local category = settings:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    category:SetPoint("TOPLEFT", 20, -40)
-    category:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    category:SetText("Category: HUD")
-    category:SetTextColor(0.8, 0.9, 1)
+    --------------------------------------------------------
+    -- Advanced Options Checkbox (Right side, text on left)
+    --------------------------------------------------------
+    local advancedCheck = CreateFrame("CheckButton", nil, settings, "InterfaceOptionsCheckButtonTemplate")
+    advancedCheck:SetPoint("TOPRIGHT", -20, -18)
+    advancedCheck:SetScale(1.0)
+    advancedCheck.Text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    advancedCheck.Text:SetText("Advanced Options")
+    advancedCheck.Text:SetTextColor(1, 1, 1)
+    advancedCheck.Text:ClearAllPoints()
+    advancedCheck.Text:SetPoint("RIGHT", advancedCheck, "LEFT", 0, 0)
+    advancedCheck:SetChecked(false)
 
     --------------------------------------------------------
-    -- UI Element Builder Functions
+    -- Basic Settings Container (compact mode)
     --------------------------------------------------------
-    
-    --[[
-        CreateCheckbox(label, yOffset, getter, setter, list)
-        
-        Creates a checkbox control.
-        
-        Parameters:
-            label (string): Display text
-            yOffset (number): Y position from top-left
-            getter (function): Returns current boolean value
-            setter (function): Called with new boolean value
-            list (table): Checkbox added to this array for syncing
-    --]]
-    local function CreateCheckbox(label, yOffset, getter, setter, list)
-        local check = CreateFrame("CheckButton", nil, settings, "InterfaceOptionsCheckButtonTemplate")
-        check:SetPoint("TOPLEFT", 20, yOffset)
-        check:SetScale(1.15)  -- Slightly larger for visibility
-        check.Text:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
+    local basicContainer = CreateFrame("Frame", nil, settings)
+    basicContainer:SetPoint("TOPLEFT", 20, -55)
+    basicContainer:SetSize(460, 240)
+
+    --------------------------------------------------------
+    -- Advanced Settings Container (expanded mode with tabs)
+    --------------------------------------------------------
+    local advancedContainer = CreateFrame("Frame", nil, settings)
+    advancedContainer:SetPoint("TOPLEFT", 20, -55)
+    advancedContainer:SetSize(680, 485)
+    advancedContainer:Hide()
+
+    --------------------------------------------------------
+    -- Helper Functions
+    --------------------------------------------------------
+    local function CreateCheckbox(parent, label, yOffset, getter, setter)
+        local check = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
+        check:SetPoint("TOPLEFT", 10, yOffset)
+        check:SetScale(1.15)
+        check.Text:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
         check.Text:SetText(label)
         check.Text:SetTextColor(1, 1, 1)
-        check.getter = getter  -- Store for later syncing
         check:SetChecked(getter())
         check:SetScript("OnClick", function(self)
             setter(self:GetChecked())
         end)
-        list[#list + 1] = check
         return check
     end
 
-    --[[
-        CreateSlider(label, yOffset, min, max, step, getter, setter, list)
-        
-        Creates a slider control with label and value display.
-        
-        Parameters:
-            label (string): Display text above slider
-            yOffset (number): Y position from top-left
-            min, max (number): Range limits
-            step (number): Increment per notch
-            getter (function): Returns current value
-            setter (function): Called with new value
-            list (table): Slider added to this array for syncing
-    --]]
-    local function CreateSlider(label, yOffset, min, max, step, getter, setter, list)
-        local container = CreateFrame("Frame", nil, settings)
-        container:SetSize(260, 60)
-        container:SetPoint("TOPLEFT", 20, yOffset)
+    local function CreateSlider(parent, label, yOffset, min, max, step, getter, setter)
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetSize(220, 50)
+        container:SetPoint("TOPLEFT", 10, yOffset)
 
-        -- Label above slider
         local sliderLabel = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        sliderLabel:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
         sliderLabel:SetPoint("TOPLEFT", 0, 0)
         sliderLabel:SetText(label)
-        sliderLabel:SetTextColor(1, 1, 1)
 
-        -- Slider control
         local slider = CreateFrame("Slider", nil, container, "OptionsSliderTemplate")
-        slider:SetPoint("TOPLEFT", 0, -25)
-        slider:SetWidth(260)
+        slider:SetPoint("TOPLEFT", 0, -20)
+        slider:SetWidth(200)
         slider:SetMinMaxValues(min, max)
         slider:SetValueStep(step)
         slider:SetValue(getter())
@@ -214,29 +146,22 @@ local function CreateEditModeSettings()
         if slider.Low then slider.Low:Hide() end
         if slider.High then slider.High:Hide() end
 
-        local valueText = slider:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        valueText:SetPoint("TOPRIGHT", slider, "BOTTOMRIGHT", 0, -2)
-        valueText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+        local valueText = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        valueText:SetPoint("BOTTOM", slider, "TOP", 0, 2)
         valueText:SetText(string.format("%.2f", getter()))
-        valueText:SetTextColor(1, 1, 1)
 
-        slider.getter = getter
         slider:SetScript("OnValueChanged", function(self, value)
             valueText:SetText(string.format("%.2f", value))
             setter(value)
         end)
 
-        list[#list + 1] = slider
         return container
     end
 
-    local function CreateColorButton(label, yOffset, getter, setter, list)
-        local btn = CreateFrame("Button", nil, settings, "UIPanelButtonTemplate")
-        btn:SetPoint("TOPLEFT", 20, yOffset)
-        btn:SetSize(180, 22)
-        if btn.Text then
-            btn.Text:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
-        end
+    local function CreateColorButton(parent, label, yOffset, getter, setter)
+        local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        btn:SetPoint("TOPLEFT", 16, yOffset)
+        btn:SetSize(160, 22)
         btn:SetText(label)
 
         local swatch = btn:CreateTexture(nil, "OVERLAY")
@@ -248,128 +173,514 @@ local function CreateEditModeSettings()
             swatch:SetColorTexture(c.r, c.g, c.b)
         end
 
-        btn.getter = getter
-        btn.updateSwatch = updateSwatch
-
         btn:SetScript("OnClick", function()
-            OpenColorPicker(getter(), function(color)
-                setter(color)
+            local c = getter()
+            local r, g, b = c.r, c.g, c.b
+
+            local function onColorChange()
+                local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+                setter({ r = nr, g = ng, b = nb })
                 updateSwatch()
-            end)
+            end
+
+            local function onCancel(prev)
+                if prev then
+                    setter({ r = prev.r, g = prev.g, b = prev.b })
+                    updateSwatch()
+                end
+            end
+
+            ColorPickerFrame.hasOpacity = false
+            ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+            ColorPickerFrame.func = onColorChange
+            ColorPickerFrame.cancelFunc = onCancel
+            ColorPickerFrame:SetColorRGB(r, g, b)
+            ColorPickerFrame:Show()
         end)
 
         updateSwatch()
-        list[#list + 1] = btn
         return btn
     end
 
-    --------------------------------------------------------
-    -- Settings Layout
-    --------------------------------------------------------
-    local yPos = - 45
+    local function CreateFontDropdown(parent, label, yOffset, getter, setter)
+        if not UIDropDownMenu_Initialize then
+            local container = CreateFrame("Frame", nil, parent)
+            container:SetPoint("TOPLEFT", 16, yOffset)
+            container:SetSize(260, 30)
+            
+            local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            labelText:SetPoint("TOPLEFT", 0, 0)
+            labelText:SetText(label .. " (dropdown unavailable)")
+            
+            return container
+        end
 
-    CreateCheckbox("Enable", yPos,
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetPoint("TOPLEFT", 16, yOffset)
+        container:SetSize(260, 40)
+
+        local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        labelText:SetPoint("TOPLEFT", 0, 0)
+        labelText:SetText(label)
+
+        local dropdown = CreateFrame("Frame", nil, container, "UIDropDownMenuTemplate")
+        dropdown:SetPoint("TOPLEFT", -15, -20)
+        UIDropDownMenu_SetWidth(dropdown, 200)
+
+        local function OnClick(self)
+            setter(self.value)
+            UIDropDownMenu_SetText(dropdown, self:GetText())
+        end
+
+        local function initialize(self, level)
+            local info = UIDropDownMenu_CreateInfo()
+            for i, fontData in ipairs(FONT_LIST) do
+                if fontData.path == "separator" then
+                    info.text = "-------------------"
+                    info.disabled = true
+                    info.notClickable = true
+                    UIDropDownMenu_AddButton(info, level)
+                else
+                    info.text = fontData.name
+                    info.value = fontData.path
+                    info.func = OnClick
+                    info.disabled = false
+                    info.notClickable = false
+                    info.checked = (getter() == fontData.path)
+                    UIDropDownMenu_AddButton(info, level)
+                end
+            end
+        end
+
+        UIDropDownMenu_Initialize(dropdown, initialize)
+        
+        for i, fontData in ipairs(FONT_LIST) do
+            if fontData.path == getter() then
+                UIDropDownMenu_SetText(dropdown, fontData.name)
+                break
+            end
+        end
+
+        return dropdown
+    end
+
+    local function CreateAnchorSelector(parent, label, yOffset, getter, setter, allowCenter)
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetPoint("TOPLEFT", 16, yOffset)
+        container:SetSize(260, 110)
+
+        local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        labelText:SetPoint("TOPLEFT", 0, 0)
+        labelText:SetText(label)
+
+        local anchorFrame = CreateFrame("Frame", nil, container, "BackdropTemplate")
+        anchorFrame:SetPoint("TOPLEFT", 0, -20)
+        anchorFrame:SetSize(90, 90)
+        anchorFrame:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = false, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        anchorFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        anchorFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+        local anchors = {
+            { point = "TOPLEFT", x = 5, y = -5 },
+            { point = "TOP", x = 37, y = -5 },
+            { point = "TOPRIGHT", x = 69, y = -5 },
+            { point = "LEFT", x = 5, y = -37 },
+            { point = "CENTER", x = 37, y = -37 },
+            { point = "RIGHT", x = 69, y = -37 },
+            { point = "BOTTOMLEFT", x = 5, y = -69 },
+            { point = "BOTTOM", x = 37, y = -69 },
+            { point = "BOTTOMRIGHT", x = 69, y = -69 },
+        }
+
+        local buttons = {}
+        for _, anchor in ipairs(anchors) do
+            if allowCenter or anchor.point ~= "CENTER" then
+                local btn = CreateFrame("Button", nil, anchorFrame)
+                btn:SetPoint("TOPLEFT", anchorFrame, "TOPLEFT", anchor.x, anchor.y)
+                btn:SetSize(16, 16)
+                
+                local bg = btn:CreateTexture(nil, "BACKGROUND")
+                bg:SetAllPoints()
+                bg:SetColorTexture(0.3, 0.3, 0.3, 0.8)
+                btn.bg = bg
+                
+                local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+                highlight:SetAllPoints()
+                highlight:SetColorTexture(0.5, 0.5, 0.5, 0.5)
+                
+                local selected = btn:CreateTexture(nil, "OVERLAY")
+                selected:SetAllPoints()
+                selected:SetColorTexture(0.2, 0.8, 0.2, 1.0)
+                selected:Hide()
+                btn.selected = selected
+                
+                btn.anchorPoint = anchor.point
+                btn:SetScript("OnClick", function(self)
+                    setter(self.anchorPoint)
+                    for _, b in ipairs(buttons) do
+                        b.selected:Hide()
+                    end
+                    self.selected:Show()
+                end)
+                
+                table.insert(buttons, btn)
+            end
+        end
+
+        local currentAnchor = getter()
+        for _, btn in ipairs(buttons) do
+            if btn.anchorPoint == currentAnchor then
+                btn.selected:Show()
+                break
+            end
+        end
+
+        local desc = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        desc:SetPoint("LEFT", anchorFrame, "RIGHT", 10, 0)
+        desc:SetWidth(150)
+        desc:SetJustifyH("LEFT")
+        desc:SetText("Click a point to position text")
+
+        return container
+    end
+
+    --------------------------------------------------------
+    -- BASIC SETTINGS (Compact Mode)
+    --------------------------------------------------------
+    local yPos = -10
+
+    CreateCheckbox(basicContainer, "Enable NextCast", yPos,
         function() return db.enabled end,
-        function(v) db.enabled = v; NextCast:GetModule("Tracker"):Update() end,
-        EditMode.checkboxList)
-    yPos = yPos - 30
+        function(v) db.enabled = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 25
 
-    CreateCheckbox("Show out of combat", yPos,
+    CreateCheckbox(basicContainer, "Show out of combat", yPos,
         function() return db.showOutOfCombat end,
-        function(v) db.showOutOfCombat = v; NextCast:GetModule("Tracker"):Update() end,
-        EditMode.checkboxList)
-    yPos = yPos - 30
+        function(v) db.showOutOfCombat = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 40
 
-    CreateCheckbox("Show cooldown swipe", yPos,
-        function() return db.showCooldownSwipe end,
-        function(v) db.showCooldownSwipe = v; ui:ApplySettings() end,
-        EditMode.checkboxList)
-    yPos = yPos - 30
-
-    CreateCheckbox("Show cooldown text", yPos,
-        function() return db.showCooldownText end,
-        function(v) db.showCooldownText = v; ui:ApplySettings() end,
-        EditMode.checkboxList)
-    yPos = yPos - 30
-
-    CreateCheckbox("Cooldown warning", yPos,
-        function() return db.cdWarningEnabled end,
-        function(v) db.cdWarningEnabled = v; ui:ApplySettings() end,
-        EditMode.checkboxList)
-    yPos = yPos - 30
-
-    CreateCheckbox("Show keybind", yPos,
-        function() return db.showKeybind end,
-        function(v) db.showKeybind = v; ui:ApplySettings() end,
-        EditMode.checkboxList)
-    yPos = yPos - 50
-
-    --------------------------------------------------------
-    -- Visual / Font options
-    --------------------------------------------------------
-    CreateSlider("Scale", yPos, 0.5, 2.0, 0.05,
+    CreateSlider(basicContainer, "Scale", yPos, 0.5, 2.0, 0.05,
         function() return db.scale end,
-        function(v) db.scale = v; ui:ApplySettings() end,
-        EditMode.sliderList)
-    yPos = yPos - 50
-
-    CreateSlider("Opacity", yPos, 0.2, 1.0, 0.05,
-        function() return db.alpha end,
-        function(v) db.alpha = v; ui:ApplySettings() end,
-        EditMode.sliderList)
-    yPos = yPos - 50
-
-    CreateSlider("Countdown font size", yPos, 10, 32, 1,
-        function() return db.cdFontSize end,
-        function(v) db.cdFontSize = v; ui:ApplySettings() end,
-        EditMode.sliderList)
-    yPos = yPos - 50
-
-    CreateSlider("Keybind font size", yPos, 8, 20, 1,
-        function() return db.keybindFontSize end,
-        function(v) db.keybindFontSize = v; ui:ApplySettings() end,
-        EditMode.sliderList)
-    yPos = yPos - 50
-
-    CreateSlider("Warning threshold", yPos, 1, 5, 1,
-        function() return db.cdWarningThreshold end,
-        function(v) db.cdWarningThreshold = v; ui:ApplySettings() end,
-        EditMode.sliderList)
+        function(v) db.scale = v; ui:ApplySettings() end)
     yPos = yPos - 60
 
+    CreateSlider(basicContainer, "Opacity", yPos, 0.2, 1.0, 0.05,
+        function() return db.alpha end,
+        function(v) db.alpha = v; ui:ApplySettings() end)
+
     --------------------------------------------------------
-    -- Color options
+    -- ADVANCED SETTINGS (Expanded Mode with Tabs)
     --------------------------------------------------------
-    CreateColorButton("Countdown text color", yPos,
+    local tabs = {}
+    local tabContents = {}
+    local activeTab = 1
+
+    -- Create custom tabs (no template dependencies)
+    for i = 1, 4 do
+        local tab = CreateFrame("Button", nil, advancedContainer)
+        tab:SetID(i)
+        tab:SetSize(110, 28)
+        
+        local bg = tab:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+        tab.bg = bg
+        
+        local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        text:SetPoint("CENTER")
+        text:SetText(({ "General", "Cooldown", "Keybind", "Warning" })[i])
+        tab.text = text
+        
+        local highlight = tab:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+        
+        tab:SetScript("OnClick", function(self)
+            activeTab = self:GetID()
+            for j = 1, 4 do
+                if tabs[j] then
+                    if j == activeTab then
+                        tabs[j].bg:SetColorTexture(0.3, 0.3, 0.3, 1.0)
+                        tabs[j].text:SetTextColor(1, 1, 1)
+                    else
+                        tabs[j].bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+                        tabs[j].text:SetTextColor(0.7, 0.7, 0.7)
+                    end
+                end
+                if tabContents[j] then
+                    tabContents[j]:SetShown(j == activeTab)
+                end
+            end
+        end)
+        
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", advancedContainer, "TOPLEFT", 10, -10)
+        else
+            tab:SetPoint("LEFT", tabs[i-1], "RIGHT", 4, 0)
+        end
+        
+        tabs[i] = tab
+    end
+
+    if tabs[1] then
+        tabs[1].bg:SetColorTexture(0.3, 0.3, 0.3, 1.0)
+        tabs[1].text:SetTextColor(1, 1, 1)
+    end
+
+    -- Scrollable containers for each tab
+    for i = 1, 4 do
+        local scrollFrame = CreateFrame("ScrollFrame", nil, advancedContainer, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 10, -50)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+        if i > 1 then scrollFrame:Hide() end
+
+        local scrollChild = CreateFrame("Frame")
+        scrollChild:SetSize(630, 650)
+        scrollFrame:SetScrollChild(scrollChild)
+
+        tabContents[i] = scrollFrame
+        tabContents[i].content = scrollChild
+    end
+
+    -- TAB 1: GENERAL
+    yPos = -10
+    CreateCheckbox(tabContents[1].content, "Enable NextCast", yPos,
+        function() return db.enabled end,
+        function(v) db.enabled = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[1].content, "Show out of combat", yPos,
+        function() return db.showOutOfCombat end,
+        function(v) db.showOutOfCombat = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 35
+
+    local hideLabel = tabContents[1].content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    hideLabel:SetPoint("TOPLEFT", 16, yPos)
+    hideLabel:SetText("Hide Conditions")
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[1].content, "Hide when mounted", yPos,
+        function() return db.hideWhenMounted end,
+        function(v) db.hideWhenMounted = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[1].content, "Hide when in vehicle", yPos,
+        function() return db.hideWhenInVehicle end,
+        function(v) db.hideWhenInVehicle = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[1].content, "Hide when possessed", yPos,
+        function() return db.hideWhenPossessed end,
+        function(v) db.hideWhenPossessed = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 45
+
+    local displayLabel = tabContents[1].content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    displayLabel:SetPoint("TOPLEFT", 16, yPos)
+    displayLabel:SetText("Display")
+    yPos = yPos - 35
+
+    CreateSlider(tabContents[1].content, "Scale", yPos, 0.5, 2.0, 0.05,
+        function() return db.scale end,
+        function(v) db.scale = v; ui:ApplySettings() end)
+    yPos = yPos - 60
+
+    CreateSlider(tabContents[1].content, "Opacity", yPos, 0.2, 1.0, 0.05,
+        function() return db.alpha end,
+        function(v) db.alpha = v; ui:ApplySettings() end)
+
+    -- TAB 2: COOLDOWN
+    yPos = -10
+    CreateCheckbox(tabContents[2].content, "Show cooldown swipe", yPos,
+        function() return db.showCooldownSwipe end,
+        function(v) db.showCooldownSwipe = v; ui:ApplySettings() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[2].content, "Show cooldown text", yPos,
+        function() return db.showCooldownText end,
+        function(v) db.showCooldownText = v; ui:ApplySettings() end)
+    yPos = yPos - 25
+
+    CreateCheckbox(tabContents[2].content, "Show tenths of a second", yPos,
+        function() return db.cdShowTenths end,
+        function(v) db.cdShowTenths = v; ui:ApplySettings() end)
+    yPos = yPos - 45
+
+    CreateFontDropdown(tabContents[2].content, "Cooldown font", yPos,
+        function() return db.cdFontFace end,
+        function(v) db.cdFontFace = v; ui:ApplySettings() end)
+    yPos = yPos - 55
+
+    CreateSlider(tabContents[2].content, "Cooldown font size", yPos, 10, 32, 1,
+        function() return db.cdFontSize end,
+        function(v) db.cdFontSize = v; ui:ApplySettings() end)
+    yPos = yPos - 60
+
+    CreateColorButton(tabContents[2].content, "Cooldown text color", yPos,
         function() return db.cdFontColor end,
-        function(v) db.cdFontColor = v; ui:ApplySettings() end,
-        EditMode.colorList)
+        function(c) db.cdFontColor = c; ui:ApplySettings() end)
     yPos = yPos - 40
 
-    CreateColorButton("Keybind text color", yPos,
+    CreateAnchorSelector(tabContents[2].content, "Text position", yPos,
+        function() return db.cdAnchor end,
+        function(v) db.cdAnchor = v; ui:ApplySettings() end,
+        true)
+
+    -- TAB 3: KEYBIND
+    yPos = -10
+    CreateCheckbox(tabContents[3].content, "Show keybind", yPos,
+        function() return db.showKeybind end,
+        function(v) db.showKeybind = v; ui:ApplySettings() end)
+    yPos = yPos - 45
+
+    CreateFontDropdown(tabContents[3].content, "Keybind font", yPos,
+        function() return db.keybindFontFace end,
+        function(v) db.keybindFontFace = v; ui:ApplySettings() end)
+    yPos = yPos - 55
+
+    CreateSlider(tabContents[3].content, "Keybind font size", yPos, 8, 20, 1,
+        function() return db.keybindFontSize end,
+        function(v) db.keybindFontSize = v; ui:ApplySettings() end)
+    yPos = yPos - 60
+
+    CreateColorButton(tabContents[3].content, "Keybind text color", yPos,
         function() return db.keybindFontColor end,
-        function(v) db.keybindFontColor = v; ui:ApplySettings() end,
-        EditMode.colorList)
+        function(c) db.keybindFontColor = c; ui:ApplySettings() end)
     yPos = yPos - 40
 
-    CreateColorButton("Warning text color", yPos,
+    CreateAnchorSelector(tabContents[3].content, "Text position", yPos,
+        function() return db.keybindAnchor end,
+        function(v) 
+            db.keybindAnchor = v
+            ui:ApplySettings()
+            if warningText then
+                warningText:SetShown(db.cdAnchor == db.keybindAnchor)
+            end
+        end,
+        false)
+    yPos = yPos - 120
+
+    local warningText = tabContents[3].content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    warningText:SetPoint("TOPLEFT", 16, yPos)
+    warningText:SetWidth(260)
+    warningText:SetJustifyH("LEFT")
+    warningText:SetTextColor(1.0, 0.5, 0.0)
+    warningText:SetText("|cFFFF8800Warning:|r Cooldown and Keybind are using the same position. This may cause readability issues. Consider positioning them separately.")
+    warningText:SetWordWrap(true)
+    warningText:SetShown(db.cdAnchor == db.keybindAnchor)
+
+    -- TAB 4: WARNING
+    yPos = -10
+    CreateCheckbox(tabContents[4].content, "Enable cooldown warning", yPos,
+        function() return db.cdWarningEnabled end,
+        function(v) db.cdWarningEnabled = v end)
+    yPos = yPos - 60
+
+    CreateSlider(tabContents[4].content, "Warning threshold (seconds)", yPos, 1, 5, 1,
+        function() return db.cdWarningThreshold end,
+        function(v) db.cdWarningThreshold = v end)
+    yPos = yPos - 60
+
+    CreateColorButton(tabContents[4].content, "Warning text color", yPos,
         function() return db.cdWarningColor end,
-        function(v) db.cdWarningColor = v; ui:ApplySettings() end,
-        EditMode.colorList)
-    yPos = yPos - 40
+        function(c) db.cdWarningColor = c; ui:ApplySettings() end)
 
     --------------------------------------------------------
-    -- Reset Button
+    -- Advanced Options Toggle
+    --------------------------------------------------------
+    advancedCheck:SetScript("OnClick", function(self)
+        local isAdvanced = self:GetChecked()
+        
+        if isAdvanced then
+            settings:SetSize(720, 560)
+            basicContainer:Hide()
+            advancedContainer:Show()
+        else
+            settings:SetSize(500, 320)
+            basicContainer:Show()
+            advancedContainer:Hide()
+        end
+    end)
+    
+    --------------------------------------------------------
+    -- Click Outside Handler (Settings Dialog)
+    --------------------------------------------------------
+    -- Register the settings dialog to close on outside clicks
+    settings:SetScript("OnLeave", function(self)
+        -- Track when mouse leaves the dialog
+    end)
+    
+    -- Create a backdrop that doesn't intercept clicks
+    -- The settings dialog itself will handle click-outside detection
+    -- by checking if the click occurred outside its bounds
+    local originalOnMouseDown = settings:GetScript("OnMouseDown") or function() end
+    
+    settings:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then
+            if originalOnMouseDown then originalOnMouseDown(self, button) end
+            return
+        end
+        
+        -- Let internal click handling proceed
+        if originalOnMouseDown then originalOnMouseDown(self, button) end
+    end)
+    
+    -- Use a dismiss frame approach: full-screen frame BELOW settings that closes it
+    local dismissFrame = CreateFrame("Frame", nil, UIParent)
+    dismissFrame:SetFrameStrata("BACKGROUND")  -- Very low, below button
+    dismissFrame:SetAllPoints(UIParent)
+    dismissFrame:EnableMouse(true)
+    dismissFrame:Hide()
+    
+    dismissFrame:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then return end
+        if settings:IsShown() then
+            -- Check if click was inside settings frame - if so, don't close
+            local mx, my = GetCursorPosition()
+            local scale = UIParent:GetScale()
+            mx, my = mx / scale, my / scale
+            
+            local left = settings:GetLeft()
+            local right = settings:GetRight()
+            local top = settings:GetTop()
+            local bottom = settings:GetBottom()
+            
+            if left and right and top and bottom then
+                -- If click IS inside settings, don't do anything (let settings handle it)
+                if mx >= left and mx <= right and my >= bottom and my <= top then
+                    return
+                end
+            end
+            
+            -- Click was outside settings, close it and clean up UI state
+            settings:Hide()
+            ui:SetUnlocked(false)
+            ui:SetTestMode(false)
+        end
+    end)
+    
+    -- Show/hide dismiss frame with settings
+    settings:HookScript("OnShow", function(self)
+        dismissFrame:Show()
+    end)
+    
+    settings:HookScript("OnHide", function(self)
+        dismissFrame:Hide()
+    end)
+
+    --------------------------------------------------------
+    -- Reset Position Button
     --------------------------------------------------------
     local resetBtn = CreateFrame("Button", nil, settings, "UIPanelButtonTemplate")
-    resetBtn:SetSize(settings:GetWidth() - 40, 24)
-    resetBtn:SetPoint("BOTTOM", 0, 15)
-    resetBtn:SetText("Reset position")
-    if resetBtn.Text then
-        resetBtn.Text:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
-    end
+    resetBtn:SetPoint("BOTTOM", 0, 12)
+    resetBtn:SetSize(140, 25)
+    resetBtn:SetText("Reset Position")
     resetBtn:SetScript("OnClick", function()
-        db.position = { point = "BOTTOMLEFT", relativePoint = "BOTTOMLEFT", x = 400, y = 300 }
+        db.position = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -120 }
         ui:ApplySettings()
     end)
 
@@ -383,54 +694,51 @@ function EditMode:Initialize()
     if self.initialized then return end
     self.initialized = true
 
-    local ui = NextCast:GetModule("UI")
-    if not ui then return end
+    self.settings = CreateEditModeSettings()
 
-    self.checkboxList = {}
-    self.sliderList = {}
-    self.colorList = {}
-
-    self.settingsDialog = CreateEditModeSettings()
+    if EventRegistry then
+        EventRegistry:RegisterCallback("EditMode.Enter", function()
+            self:Enter()
+        end)
+        EventRegistry:RegisterCallback("EditMode.Exit", function()
+            self:Exit()
+        end)
+    end
 end
 
-------------------------------------------------------------
--- Edit Mode Control
-------------------------------------------------------------
 function EditMode:Enter()
-    if self.active then return end
     self.active = true
-
-    local ui = NextCast:GetModule("UI")
-    local db = NextCast:GetModule("Core").db
-
-    if db then
-        db.locked = false
+    local core = NextCast:GetModule("Core")
+    if core and core.db then
+        core.db.locked = false
     end
-
-    if ui and ui.frame then
+    local ui = NextCast:GetModule("UI")
+    if ui then
         ui:SetUnlocked(true)
-        ui:SetVisible(true)
     end
 end
 
 function EditMode:Exit()
-    if not self.active then return end
     self.active = false
-
+    local core = NextCast:GetModule("Core")
+    if core and core.db then
+        core.db.locked = true
+    end
+    if self.settings then
+        self.settings:Hide()
+    end
     local ui = NextCast:GetModule("UI")
-    local db = NextCast:GetModule("Core").db
-
-    if db then
-        db.locked = true
-    end
-
-    if ui and ui.frame then
+    if ui then
         ui:SetUnlocked(false)
-        ui:SetTestMode(false)
     end
+end
 
-    if self.settingsDialog then
-        self.settingsDialog:Hide()
+function EditMode:ToggleSettings()
+    if not self.settings then return end
+    if self.settings:IsShown() then
+        self.settings:Hide()
+    else
+        self.settings:Show()
     end
 end
 
@@ -441,16 +749,3 @@ function EditMode:Toggle()
         self:Enter()
     end
 end
-
-------------------------------------------------------------
--- Blizzard Edit Mode Integration
-------------------------------------------------------------
-EventRegistry:RegisterCallback("EditMode.Enter", function()
-    local module = NextCast:GetModule("EditMode")
-    if module then module:Enter() end
-end)
-
-EventRegistry:RegisterCallback("EditMode.Exit", function()
-    local module = NextCast:GetModule("EditMode")
-    if module then module:Exit() end
-end)

@@ -212,6 +212,26 @@ function Tracker:Update()
         return
     end
 
+    -- Check hide conditions
+    local shouldHide = false
+    
+    if db.hideWhenMounted and IsMounted() then
+        shouldHide = true
+    end
+    
+    if db.hideWhenInVehicle and (UnitInVehicle("player") or UnitHasVehicleUI("player")) then
+        shouldHide = true
+    end
+    
+    if db.hideWhenPossessed and (UnitIsCharmed("player") or (HasPossessBar and HasPossessBar())) then
+        shouldHide = true
+    end
+    
+    if shouldHide then
+        ui:SetVisible(false)
+        return
+    end
+
     local showRecommendation = InCombatLockdown() or db.showOutOfCombat or IsDungeonOrRaid()
 
     -- Always detect spells, just control visibility

@@ -102,7 +102,6 @@ function UI:Initialize()
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
-    frame:RegisterForClicks("LeftButtonUp")
 
     --------------------------------------------------------
     -- Click vs Drag Detection Variables
@@ -112,6 +111,7 @@ function UI:Initialize()
     frame._mouseDownX = 0
     frame._mouseDownY = 0
     frame._mouseDownTime = 0
+    frame._isDragging = false
 
     --------------------------------------------------------
     -- Visual Elements
@@ -157,13 +157,13 @@ function UI:Initialize()
     local keybind = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     keybind:SetPoint("BOTTOMLEFT", 5, 5)
     keybind:SetTextColor(1, 1, 1)
-    keybind:SetFont(keybind:GetFont(), 12, "OUTLINE")
+    keybind:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
     frame.keybind = keybind
 
     local cdText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     cdText:SetPoint("CENTER", 0, 0)
     cdText:SetTextColor(1, 0.95, 0.6)
-    cdText:SetFont(cdText:GetFont(), 18, "OUTLINE")
+    cdText:SetFont("Fonts\\FRIZQT__.TTF", 18, "OUTLINE")
     frame.cdText = cdText
 
     local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -196,6 +196,7 @@ function UI:Initialize()
     self.dismissFrame = dismiss
 
     --------------------------------------------------------
+    --------------------------------------------------------
     -- Drag Behavior
     --------------------------------------------------------
     frame:SetScript("OnDragStart", function(self)
@@ -210,11 +211,12 @@ function UI:Initialize()
     end)
 
     --------------------------------------------------------
-    -- Click Behavior (Strict)
+    -- Click Behavior - Detect short clicks vs drags
     --------------------------------------------------------
     frame:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
 
+        -- Record position and time for click detection
         self._mouseDownX, self._mouseDownY = GetCursorPosition()
         self._mouseDownTime = GetTime()
     end)
@@ -235,7 +237,7 @@ function UI:Initialize()
         if dt > 0.15 then return end
 
         -- Strict: If settings are open, do nothing
-        if EditMode.settingsDialog and EditMode.settingsDialog:IsShown() then
+        if EditMode.settings and EditMode.settings:IsShown() then
             return
         end
 
@@ -250,9 +252,9 @@ function UI:Initialize()
             if btn.updateSwatch then btn.updateSwatch() end
         end
 
-        EditMode.settingsDialog:ClearAllPoints()
-        EditMode.settingsDialog:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 305, -100)
-        EditMode.settingsDialog:Show()
+        EditMode.settings:ClearAllPoints()
+        EditMode.settings:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 305, -100)
+        EditMode.settings:Show()
 
         UI:SetUnlocked(true)
         UI.dismissFrame:Show()
@@ -281,14 +283,83 @@ function UI:ApplySettings()
     ApplyPosition(self.frame, db)
     EnsureOnScreen(self.frame)
 
-    self.frame.keybind:SetTextHeight(db.keybindFontSize or 12)
+    -- Apply fonts (face + size) with fallback protection
+    local kbFont = db.keybindFontFace or "Fonts\\FRIZQT__.TTF"
+    local cdFont = db.cdFontFace or "Fonts\\FRIZQT__.TTF"
+    
+    -- Protected call in case font path is invalid
+    local success1 = pcall(self.frame.keybind.SetFont, self.frame.keybind, kbFont, db.keybindFontSize or 12, "OUTLINE")
+    if not success1 then
+        -- Fallback to default font if custom font fails
+        self.frame.keybind:SetFont("Fonts\\FRIZQT__.TTF", db.keybindFontSize or 12, "OUTLINE")
+    end
+    
+    local success2 = pcall(self.frame.cdText.SetFont, self.frame.cdText, cdFont, db.cdFontSize or 18, "OUTLINE")
+    if not success2 then
+        -- Fallback to default font if custom font fails
+        self.frame.cdText:SetFont("Fonts\\FRIZQT__.TTF", db.cdFontSize or 18, "OUTLINE")
+    end
+    
+    -- v1.1.0: Apply anchor positions
+    local kbAnchor = db.keybindAnchor or "TOPLEFT"
+    local cdAnchor = db.cdAnchor or "CENTER"
+    
+    -- Keybind anchor with offsets for edge padding
+    self.frame.keybind:ClearAllPoints()
+    if kbAnchor == "TOPLEFT" then
+        self.frame.keybind:SetPoint("TOPLEFT", 5, -5)
+    elseif kbAnchor == "TOP" then
+        self.frame.keybind:SetPoint("TOP", 0, -5)
+    elseif kbAnchor == "TOPRIGHT" then
+        self.frame.keybind:SetPoint("TOPRIGHT", -5, -5)
+    elseif kbAnchor == "LEFT" then
+        self.frame.keybind:SetPoint("LEFT", 5, 0)
+    elseif kbAnchor == "RIGHT" then
+        self.frame.keybind:SetPoint("RIGHT", -5, 0)
+    elseif kbAnchor == "BOTTOMLEFT" then
+        self.frame.keybind:SetPoint("BOTTOMLEFT", 5, 5)
+    elseif kbAnchor == "BOTTOM" then
+        self.frame.keybind:SetPoint("BOTTOM", 0, 5)
+    elseif kbAnchor == "BOTTOMRIGHT" then
+        self.frame.keybind:SetPoint("BOTTOMRIGHT", -5, 5)
+    else
+        -- Fallback to TOPLEFT
+        self.frame.keybind:SetPoint("TOPLEFT", 5, -5)
+    end
+    
+    -- Cooldown text anchor (can use CENTER)
+    self.frame.cdText:ClearAllPoints()
+    if cdAnchor == "CENTER" then
+        self.frame.cdText:SetPoint("CENTER", 0, 0)
+    elseif cdAnchor == "TOPLEFT" then
+        self.frame.cdText:SetPoint("TOPLEFT", 5, -5)
+    elseif cdAnchor == "TOP" then
+        self.frame.cdText:SetPoint("TOP", 0, -5)
+    elseif cdAnchor == "TOPRIGHT" then
+        self.frame.cdText:SetPoint("TOPRIGHT", -5, -5)
+    elseif cdAnchor == "LEFT" then
+        self.frame.cdText:SetPoint("LEFT", 5, 0)
+    elseif cdAnchor == "RIGHT" then
+        self.frame.cdText:SetPoint("RIGHT", -5, 0)
+    elseif cdAnchor == "BOTTOMLEFT" then
+        self.frame.cdText:SetPoint("BOTTOMLEFT", 5, 5)
+    elseif cdAnchor == "BOTTOM" then
+        self.frame.cdText:SetPoint("BOTTOM", 0, 5)
+    elseif cdAnchor == "BOTTOMRIGHT" then
+        self.frame.cdText:SetPoint("BOTTOMRIGHT", -5, 5)
+    else
+        -- Fallback to CENTER
+        self.frame.cdText:SetPoint("CENTER", 0, 0)
+    end
+    
+    -- Apply colors
     local kColor = db.keybindFontColor or { r = 1, g = 1, b = 1 }
     self.frame.keybind:SetTextColor(kColor.r, kColor.g, kColor.b)
 
-    self.frame.cdText:SetTextHeight(db.cdFontSize or 18)
     local cColor = db.cdFontColor or { r = 1, g = 0.95, b = 0.6 }
     self.frame.cdText:SetTextColor(cColor.r, cColor.g, cColor.b)
 
+    -- Show/hide elements
     self.frame.keybind:SetShown(db.showKeybind)
     self.frame.cdText:SetShown(db.showCooldownText)
     self.frame.cooldown:SetDrawSwipe(db.showCooldownSwipe)
@@ -387,13 +458,25 @@ function UI:SetTestMode(enabled)
 end
 
 function UI:SetCooldownText(text, remaining)
+    local db = NextCast:GetModule("Core").db
+    
+    -- Format text based on precision setting
+    if remaining and remaining > 0 then
+        if db and db.cdShowTenths then
+            text = string.format("%.1f", remaining)
+        else
+            text = string.format("%.0f", remaining)
+        end
+    end
+    
     self.frame.cdText:SetText(text or "")
 
-    local db = NextCast:GetModule("Core").db
-    if remaining and db and db.cdWarningThreshold and remaining <= db.cdWarningThreshold then
+    -- Apply warning color if below threshold
+    if remaining and db and db.cdWarningEnabled and db.cdWarningThreshold and remaining <= db.cdWarningThreshold then
         local color = db.cdWarningColor or { r = 1, g = 0, b = 0 }
         self.frame.cdText:SetTextColor(color.r, color.g, color.b)
     else
-        self.frame.cdText:SetTextColor(1, 0.95, 0.6)
+        local cColor = db and db.cdFontColor or { r = 1, g = 0.95, b = 0.6 }
+        self.frame.cdText:SetTextColor(cColor.r, cColor.g, cColor.b)
     end
 end

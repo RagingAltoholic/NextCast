@@ -1,9 +1,9 @@
-## Interface: 120000, 120001
+## Interface: 120000, 120001, 120002
 ## Title: NextCast
-## Notes: Shows Blizzard Assisted Combat as a customizablefloating button.
+## Notes: Shows Blizzard Assisted Combat as a customizable floating button.
 ## Author: RagingAltoholic
 ## Category-enUS: HUD
-## Version: 1.0.6
+## Version: 1.1.0
 ## SavedVariables: NextCastDB
 ## OptionalDeps: Blizzard_Settings
 

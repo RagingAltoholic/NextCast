@@ -2,6 +2,124 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.1.0] - 2026-02-18
+
+### Major Features
+- **Edit Mode Dragging Fully Functional**: Button is now fully draggable within WoW's Edit Mode system
+  - Frame strata properly layered (MEDIUM for button, DIALOG for settings, BACKGROUND for dismiss)
+  - Click detection distinguishes between short clicks (opens settings) and drags (moves button)
+  - Proper frame hierarchy prevents event conflicts and interference
+  - Button properly unlocks when entering Edit Mode, locks when exiting
+- **Settings Dialog in Edit Mode**: Full settings interface accessible while positioning button
+  - Settings dialog (DIALOG strata) independently draggable
+  - Settings close on outside click via dismiss frame
+  - All settings synchronized when opening dialog
+  - Supports compact and advanced tabbed interface modes
+
+### Added
+- **Inline Advanced Options**: Edit Mode dialog now includes complete settings interface
+  - Compact mode (500x320): Basic settings (enable, combat, scale, opacity, reset position)
+  - "Advanced Options" checkbox expands to full tabbed interface (720x560)
+  - All settings accessible within Edit Mode (no external panels needed)
+  - Eliminates all UI taint issues by avoiding external Settings panel calls
+- **Visual Anchor Position System**: Interactive anchor selection for cooldown and keybind text
+  - Click-to-select anchor points on a visual grid (3x3 grid with 9 positions)
+  - Cooldown text supports all 9 positions including CENTER
+  - Keybind text supports 8 positions (excludes CENTER to avoid collision)
+  - Real-time preview updates when anchor position changes
+- **Collision Warning**: Automatic detection when cooldown and keybind use the same anchor
+  - Warning message displayed in Keybind tab settings
+  - Suggests positioning texts separately for better readability
+- **Tabbed Interface**: Both Edit Mode (advanced) and Options panel use organized tabs
+  - General Tab: Enable/disable, combat visibility, hide conditions, scale, opacity
+  - Cooldown Tab: Swipe, text, font, size, color, position with anchor selector
+  - Keybind Tab: Show/hide, font, size, color, position with anchor selector
+  - Warning Tab: Enable/disable, threshold, color
+
+### Changed
+- **Default Anchors**: 
+  - Cooldown text defaults to CENTER
+  - Keybind text defaults to TOPLEFT (changed from BOTTOMLEFT)
+- **Edit Mode Integration**: Complete redesign following Blizzard's "Advanced Options" pattern
+  - Settings embedded within Edit Mode dialog (not external)
+  - Checkbox toggles between compact and expanded modes
+  - No programmatic Edit Mode exit needed
+  - Zero taint risk from external panel access
+  - Button dragging fully supported with proper state management
+- **Button Registration**: Removed RegisterForClicks interference with drag system
+  - Button now uses OnMouseDown/OnMouseUp for click detection
+  - RegisterForDrag handles all drag events cleanly
+
+### Fixed
+- **Button Dragging**: Complete restoration of Edit Mode dragging functionality
+  - Fixed frame strata and event propagation hierarchy
+  - Proper db.locked synchronization in EditMode:Enter/Exit
+  - Removed click registration interference with drag system
+  - Button now properly unlocks in Edit Mode and locks on exit
+- **Edit Mode Taint Error**: Eliminated by embedding all settings in Edit Mode dialog
+  - No longer calls EditModeManagerFrame:ExitEditMode() 
+  - No longer calls Settings.OpenToCategory() from Edit Mode
+  - All configuration happens within self-contained dialog
+- **Settings Panel Layout**: Options panel tabs now properly positioned
+  - Tabs appear below title text instead of overlapping
+  - Tab content positioned below tabs (no overlap)
+  - Preview panel remains on right side across all tabs
+  - Options panel positioned within visible bounds
+- **Anchor Positions**: Properly applied with edge padding (5px offset from edges)
+
+### Technical
+- New settings: `cdAnchor` (default: "CENTER"), `keybindAnchor` (default: "TOPLEFT")
+- Anchor grid UI uses BackdropTemplate with clickable buttons
+- Anchor values: "CENTER", "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"
+- UI module applies anchors with consistent 5px edge padding
+- Edit Mode settings dialog: Two-state design (compact/expanded) with embedded tab system
+- Custom tab styling to avoid taint from Blizzard templates
+- Settings panel tabs positioned at Y offset -60 below title
+- Tab content positioned at Y offset -100 below subtitle
+- Frame strata hierarchy: DIALOG (settings) > MEDIUM (button) > BACKGROUND (dismiss)
+- Drag threshold: >3px movement or >0.15s hold time
+- EventRegistry callbacks properly handle EditMode.Enter and EditMode.Exit
+- All settings self-contained within frames (no external API calls during Edit Mode)
+
+## [1.0.7] - 2026-02-18
+
+### Added
+- **Tabbed Settings Interface**: Main Options panel now uses tabs for better organization
+  - General Tab: Enable/disable, combat visibility, hide conditions, scale, opacity
+  - Cooldown Tab: Swipe, text, font selection, font size, color, precision
+  - Keybind Tab: Show/hide, font selection, font size, color
+  - Warning Tab: Enable/disable, threshold, color
+- **Font Customization**: Full font selection for cooldown and keybind text
+  - Dropdown menus with all WoW fonts (common fonts listed first)
+  - Supports: Friz Quadrata, Arial Narrow, Skurri, Morpheus, and 11 additional fonts
+  - Independent font selection for cooldown and keybind text
+- **Hide Conditions**: New visibility toggles for special player states
+  - Hide when mounted
+  - Hide when in vehicle
+  - Hide when possessed/mind controlled
+- **Cooldown Precision**: Toggle for cooldown text format
+  - "Show tenths of a second" checkbox (e.g., "10.2" vs "10")
+
+### Changed
+- **Edit Mode Settings**: Streamlined to show only essential settings
+  - Removed advanced options from Edit Mode dialog
+  - Added "More Settings..." button that exits Edit Mode and opens full Options panel
+  - Reduced dialog height to 520px (was 680px)
+  - Added scrollable frame for future expansion
+- **Settings Organization**: Reorganized all settings into logical tab categories
+- **Preview Panel**: Enhanced to show font changes and precision format in real-time
+- **UI Font Application**: Now properly applies font faces from settings
+
+### Fixed
+- Settings panel preview now displays selected fonts correctly
+- Cooldown warning only applies when enabled (respects cdWarningEnabled setting)
+
+### Technical
+- Font list includes 15 WoW fonts with visual separator between common and additional fonts
+- Hide conditions use native WoW APIs: IsMounted(), UnitInVehicle(), UnitIsCharmed(), HasPossessBar()
+- Cooldown text formatting respects precision setting (string.format "%.1f" vs "%.0f")
+- Edit Mode "More Settings" button exits Edit Mode before opening Options panel
+
 ## [1.0.6] - 2026-02-01
 
 ### Added

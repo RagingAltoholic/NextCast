@@ -15,8 +15,12 @@ local defaults = {
     cdWarningColor = { r = 1.0, g = 0.0, b = 0.0 },
     cdFontSize = 18,
     cdFontColor = { r = 1.0, g = 0.95, b = 0.6 },
+    cdFontFace = "Fonts\\FRIZQT__.TTF",
+    cdAnchor = "CENTER",  -- v1.1.0: Cooldown text anchor position
     keybindFontSize = 12,
     keybindFontColor = { r = 1.0, g = 1.0, b = 1.0 },
+    keybindFontFace = "Fonts\\FRIZQT__.TTF",
+    keybindAnchor = "TOPLEFT",  -- v1.1.0: Keybind text anchor position
     position = { point = "BOTTOMLEFT", relativePoint = "BOTTOMLEFT", x = 935, y = 515 },
     trackAssistedCombat = true,
     trackOverlay = true,
@@ -24,6 +28,10 @@ local defaults = {
     debugMode = false,
     locked = true,
     cdWarningEnabled = true,
+    hideWhenMounted = false,
+    hideWhenInVehicle = false,
+    hideWhenPossessed = false,
+    cdShowTenths = true,
 }
 
 local function CopyDefaults(src, dst)
