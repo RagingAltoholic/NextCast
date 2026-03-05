@@ -56,7 +56,7 @@ local function CreateEditModeSettings()
 
     -- Main dialog frame
     local settings = CreateFrame("Frame", "NextCastEditModeSettings", UIParent, "BackdropTemplate")
-    settings:SetSize(500, 320)  -- Compact by default
+    settings:SetSize(400, 320)  -- Compact by default (100px narrower)
     settings:SetPoint("CENTER")
     settings:SetFrameStrata("DIALOG")  -- Above game UI
     settings:SetBackdrop({
@@ -100,14 +100,14 @@ local function CreateEditModeSettings()
     --------------------------------------------------------
     local basicContainer = CreateFrame("Frame", nil, settings)
     basicContainer:SetPoint("TOPLEFT", 20, -55)
-    basicContainer:SetSize(460, 240)
+    basicContainer:SetSize(360, 240)
 
     --------------------------------------------------------
     -- Advanced Settings Container (expanded mode with tabs)
     --------------------------------------------------------
     local advancedContainer = CreateFrame("Frame", nil, settings)
     advancedContainer:SetPoint("TOPLEFT", 20, -55)
-    advancedContainer:SetSize(680, 485)
+    advancedContainer:SetSize(580, 485)
     advancedContainer:Hide()
 
     --------------------------------------------------------
@@ -116,7 +116,7 @@ local function CreateEditModeSettings()
     local function CreateCheckbox(parent, label, yOffset, getter, setter)
         local check = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
         check:SetPoint("TOPLEFT", 10, yOffset)
-        check:SetScale(1.15)
+        check:SetScale(1.0)
         check.Text:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
         check.Text:SetText(label)
         check.Text:SetTextColor(1, 1, 1)
@@ -127,10 +127,10 @@ local function CreateEditModeSettings()
         return check
     end
 
-    local function CreateSlider(parent, label, yOffset, min, max, step, getter, setter)
+    local function CreateSlider(parent, label, yOffset, min, max, step, getter, setter, xOffset)
         local container = CreateFrame("Frame", nil, parent)
         container:SetSize(220, 50)
-        container:SetPoint("TOPLEFT", 10, yOffset)
+        container:SetPoint("TOPLEFT", xOffset or 10, yOffset)
 
         local sliderLabel = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         sliderLabel:SetPoint("TOPLEFT", 0, 0)
@@ -147,7 +147,7 @@ local function CreateEditModeSettings()
         if slider.High then slider.High:Hide() end
 
         local valueText = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        valueText:SetPoint("BOTTOM", slider, "TOP", 0, 2)
+        valueText:SetPoint("TOPRIGHT", slider, "BOTTOMRIGHT", 0, -2)
         valueText:SetText(string.format("%.2f", getter()))
 
         slider:SetScript("OnValueChanged", function(self, value)
@@ -432,19 +432,15 @@ local function CreateEditModeSettings()
         tabs[1].text:SetTextColor(1, 1, 1)
     end
 
-    -- Scrollable containers for each tab
+    -- Static containers for each tab (no scrollbars)
     for i = 1, 4 do
-        local scrollFrame = CreateFrame("ScrollFrame", nil, advancedContainer, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetPoint("TOPLEFT", 10, -50)
-        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
-        if i > 1 then scrollFrame:Hide() end
+        local contentFrame = CreateFrame("Frame", nil, advancedContainer)
+        contentFrame:SetPoint("TOPLEFT", 10, -50)
+        contentFrame:SetPoint("BOTTOMRIGHT", -10, 10)
+        if i > 1 then contentFrame:Hide() end
 
-        local scrollChild = CreateFrame("Frame")
-        scrollChild:SetSize(630, 650)
-        scrollFrame:SetScrollChild(scrollChild)
-
-        tabContents[i] = scrollFrame
-        tabContents[i].content = scrollChild
+        tabContents[i] = contentFrame
+        tabContents[i].content = contentFrame
     end
 
     -- TAB 1: GENERAL
@@ -452,46 +448,71 @@ local function CreateEditModeSettings()
     CreateCheckbox(tabContents[1].content, "Enable NextCast", yPos,
         function() return db.enabled end,
         function(v) db.enabled = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1].content, "Show out of combat", yPos,
         function() return db.showOutOfCombat end,
         function(v) db.showOutOfCombat = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 35
+    yPos = yPos - 40
+
+    local buffLabel = tabContents[1].content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    buffLabel:SetPoint("TOPLEFT", 16, yPos)
+    buffLabel:SetText("Self-Buff Reminder")
+    yPos = yPos - 30
+
+    CreateCheckbox(tabContents[1].content, "Enable self-buff reminder", yPos,
+        function() return db.selfBuffReminderEnabled end,
+        function(v) db.selfBuffReminderEnabled = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 45
+
+    CreateSlider(tabContents[1].content, "Reapply threshold (seconds)", yPos, 5, 300, 5,
+        function() return db.selfBuffReminderThreshold end,
+        function(v) db.selfBuffReminderThreshold = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 58
+
+    CreateCheckbox(tabContents[1].content, "Show reminder in combat", yPos,
+        function() return db.selfBuffReminderInCombat end,
+        function(v) db.selfBuffReminderInCombat = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 42
 
     local hideLabel = tabContents[1].content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     hideLabel:SetPoint("TOPLEFT", 16, yPos)
     hideLabel:SetText("Hide Conditions")
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1].content, "Hide when mounted", yPos,
         function() return db.hideWhenMounted end,
         function(v) db.hideWhenMounted = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1].content, "Hide when in vehicle", yPos,
         function() return db.hideWhenInVehicle end,
         function(v) db.hideWhenInVehicle = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1].content, "Hide when possessed", yPos,
         function() return db.hideWhenPossessed end,
         function(v) db.hideWhenPossessed = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 45
+    yPos = yPos - 42
+
+    local rightColumnX = 330
+    local rightYPos = -10
 
     local displayLabel = tabContents[1].content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    displayLabel:SetPoint("TOPLEFT", 16, yPos)
+    displayLabel:SetPoint("TOPLEFT", rightColumnX, rightYPos)
     displayLabel:SetText("Display")
-    yPos = yPos - 35
+    rightYPos = rightYPos - 34
 
-    CreateSlider(tabContents[1].content, "Scale", yPos, 0.5, 2.0, 0.05,
+    CreateSlider(tabContents[1].content, "Scale", rightYPos, 0.5, 2.0, 0.05,
         function() return db.scale end,
-        function(v) db.scale = v; ui:ApplySettings() end)
-    yPos = yPos - 60
+        function(v) db.scale = v; ui:ApplySettings() end,
+        rightColumnX)
+    rightYPos = rightYPos - 58
 
-    CreateSlider(tabContents[1].content, "Opacity", yPos, 0.2, 1.0, 0.05,
+    CreateSlider(tabContents[1].content, "Opacity", rightYPos, 0.2, 1.0, 0.05,
         function() return db.alpha end,
-        function(v) db.alpha = v; ui:ApplySettings() end)
+        function(v) db.alpha = v; ui:ApplySettings() end,
+        rightColumnX)
 
     -- TAB 2: COOLDOWN
     yPos = -10
@@ -552,6 +573,7 @@ local function CreateEditModeSettings()
         function(c) db.keybindFontColor = c; ui:ApplySettings() end)
     yPos = yPos - 40
 
+    local warningText
     CreateAnchorSelector(tabContents[3].content, "Text position", yPos,
         function() return db.keybindAnchor end,
         function(v) 
@@ -564,7 +586,7 @@ local function CreateEditModeSettings()
         false)
     yPos = yPos - 120
 
-    local warningText = tabContents[3].content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    warningText = tabContents[3].content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     warningText:SetPoint("TOPLEFT", 16, yPos)
     warningText:SetWidth(260)
     warningText:SetJustifyH("LEFT")
@@ -596,11 +618,11 @@ local function CreateEditModeSettings()
         local isAdvanced = self:GetChecked()
         
         if isAdvanced then
-            settings:SetSize(720, 560)
+            settings:SetSize(620, 560)
             basicContainer:Hide()
             advancedContainer:Show()
         else
-            settings:SetSize(500, 320)
+            settings:SetSize(400, 320)
             basicContainer:Show()
             advancedContainer:Hide()
         end
@@ -680,7 +702,10 @@ local function CreateEditModeSettings()
     resetBtn:SetSize(140, 25)
     resetBtn:SetText("Reset Position")
     resetBtn:SetScript("OnClick", function()
-        db.position = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -120 }
+        local buttonSize = 50
+        local x = (UIParent:GetWidth() - buttonSize) / 2
+        local y = ((UIParent:GetHeight() - buttonSize) / 2) - 120
+        db.position = { point = "BOTTOMLEFT", relativePoint = "BOTTOMLEFT", x = x, y = y }
         ui:ApplySettings()
     end)
 

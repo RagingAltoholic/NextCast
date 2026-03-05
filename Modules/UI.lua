@@ -253,7 +253,7 @@ function UI:Initialize()
         end
 
         EditMode.settings:ClearAllPoints()
-        EditMode.settings:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 305, -100)
+        EditMode.settings:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 205, -100)
         EditMode.settings:Show()
 
         UI:SetUnlocked(true)
@@ -434,7 +434,7 @@ function UI:SetSpell(texture, keybind)
 end
 
 function UI:SetCooldown(startTime, duration, enabled)
-    if enabled and duration and duration > 0 then
+    if enabled and startTime and duration then
         self.frame.cooldown:SetCooldown(startTime, duration)
     else
         if CooldownFrame_Clear then

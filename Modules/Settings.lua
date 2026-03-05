@@ -517,44 +517,65 @@ local function CreateOptionsPanel()
     CreateCheckbox(tabContents[1], "Enable NextCast", yPos,
         function() return db.enabled end,
         function(v) db.enabled = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1], "Show out of combat", yPos,
         function() return db.showOutOfCombat end,
         function(v) db.showOutOfCombat = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 35
+    yPos = yPos - 40
+
+    local buffLabel = tabContents[1]:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    buffLabel:SetPoint("TOPLEFT", 16, yPos)
+    buffLabel:SetText("Self-Buff Reminder")
+    yPos = yPos - 30
+
+    CreateCheckbox(tabContents[1], "Enable self-buff reminder", yPos,
+        function() return db.selfBuffReminderEnabled end,
+        function(v) db.selfBuffReminderEnabled = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 45
+
+    CreateSlider(tabContents[1], "Reapply threshold (seconds)", yPos, 5, 300, 5,
+        function() return db.selfBuffReminderThreshold end,
+        function(v) db.selfBuffReminderThreshold = v; NextCast:GetModule("Tracker"):Update() end,
+        function(v) return string.format("%.0f", v) end)
+    yPos = yPos - 58
+
+    CreateCheckbox(tabContents[1], "Show reminder in combat", yPos,
+        function() return db.selfBuffReminderInCombat end,
+        function(v) db.selfBuffReminderInCombat = v; NextCast:GetModule("Tracker"):Update() end)
+    yPos = yPos - 42
 
     -- Hide conditions section
     local hideLabel = tabContents[1]:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     hideLabel:SetPoint("TOPLEFT", 16, yPos)
     hideLabel:SetText("Hide Conditions")
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1], "Hide when mounted", yPos,
         function() return db.hideWhenMounted end,
         function(v) db.hideWhenMounted = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1], "Hide when in vehicle", yPos,
         function() return db.hideWhenInVehicle end,
         function(v) db.hideWhenInVehicle = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 25
+    yPos = yPos - 30
 
     CreateCheckbox(tabContents[1], "Hide when possessed", yPos,
         function() return db.hideWhenPossessed end,
         function(v) db.hideWhenPossessed = v; NextCast:GetModule("Tracker"):Update() end)
-    yPos = yPos - 45
+    yPos = yPos - 42
 
     -- Display section
     local displayLabel = tabContents[1]:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     displayLabel:SetPoint("TOPLEFT", 16, yPos)
     displayLabel:SetText("Display")
-    yPos = yPos - 35
+    yPos = yPos - 34
 
     CreateSlider(tabContents[1], "Scale", yPos, 0.5, 2.0, 0.05,
         function() return db.scale end,
         function(v) db.scale = v; NextCast:GetModule("UI"):ApplySettings() end)
-    yPos = yPos - 50
+    yPos = yPos - 58
 
     CreateSlider(tabContents[1], "Opacity", yPos, 0.2, 1.0, 0.05,
         function() return db.alpha end,
@@ -643,11 +664,11 @@ local function CreateOptionsPanel()
             db.keybindAnchor = v
             NextCast:GetModule("UI"):ApplySettings()
             -- Update collision warning
-            if warningText then
+            if tabContents[3].warningText then
                 if db.cdAnchor == db.keybindAnchor then
-                    warningText:Show()
+                    tabContents[3].warningText:Show()
                 else
-                    warningText:Hide()
+                    tabContents[3].warningText:Hide()
                 end
             end
         end,
@@ -655,18 +676,18 @@ local function CreateOptionsPanel()
     yPos = yPos - 120
 
     -- Collision warning
-    local warningText = tabContents[3]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    warningText:SetPoint("TOPLEFT", 16, yPos)
-    warningText:SetWidth(260)
-    warningText:SetJustifyH("LEFT")
-    warningText:SetTextColor(1.0, 0.5, 0.0)
-    warningText:SetText("|cFFFF8800Warning:|r Cooldown and Keybind are using the same position. This may cause readability issues. Consider positioning them separately.")
-    warningText:SetWordWrap(true)
+    tabContents[3].warningText = tabContents[3]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    tabContents[3].warningText:SetPoint("TOPLEFT", 16, yPos)
+    tabContents[3].warningText:SetWidth(260)
+    tabContents[3].warningText:SetJustifyH("LEFT")
+    tabContents[3].warningText:SetTextColor(1.0, 0.5, 0.0)
+    tabContents[3].warningText:SetText("|cFFFF8800Warning:|r Cooldown and Keybind are using the same position. This may cause readability issues. Consider positioning them separately.")
+    tabContents[3].warningText:SetWordWrap(true)
     -- Show/hide based on anchor collision
     if db.cdAnchor == db.keybindAnchor then
-        warningText:Show()
+        tabContents[3].warningText:Show()
     else
-        warningText:Hide()
+        tabContents[3].warningText:Hide()
     end
 
     --------------------------------------------------------
@@ -702,6 +723,9 @@ local function CreateOptionsPanel()
         db.hideWhenMounted = false
         db.hideWhenInVehicle = false
         db.hideWhenPossessed = false
+        db.selfBuffReminderEnabled = true
+        db.selfBuffReminderThreshold = 30
+        db.selfBuffReminderInCombat = false
         db.showCooldownSwipe = true
         db.showCooldownText = true
         db.showKeybind = true
@@ -773,7 +797,10 @@ function SettingsModule:Initialize()
             print("NextCast: Show out of combat - " .. (db.showOutOfCombat and "ON" or "OFF"))
             NextCast:GetModule("Tracker"):Update()
         elseif cmd == "resetpos" then
-            db.position = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -120 }
+            local buttonSize = 50
+            local x = (UIParent:GetWidth() - buttonSize) / 2
+            local y = ((UIParent:GetHeight() - buttonSize) / 2) - 120
+            db.position = { point = "BOTTOMLEFT", relativePoint = "BOTTOMLEFT", x = x, y = y }
             NextCast:GetModule("UI"):ApplySettings()
             print("NextCast: Position reset")
         elseif cmd == "debug" then

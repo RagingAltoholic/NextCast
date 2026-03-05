@@ -2,6 +2,51 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.1.1] - 2026-03-04
+
+### Added
+- **Self-Buff Reminder (Restored)**: Optional reminder support for class-castable long-duration buffs
+  - Included buff coverage:
+    - Druid: Mark of the Wild
+    - Mage: Arcane Intellect
+    - Priest: Power Word: Fortitude
+    - Warrior: Battle Shout
+    - Evoker: Blessing of the Bronze
+    - Shaman: Skyfury
+    - Paladin (Lightsmith): Rite of Sanctification / Rite of Adjuration (whichever is talented)
+  - Reminder checks only known/castable buff spells for the current class/spec
+
+### Fixed
+- **HUD Reset Positioning**: Reset now writes coordinates using the button's actual `BOTTOMLEFT` anchor model
+  - Prevents reset actions from placing the HUD unexpectedly off-screen
+- **Self-Buff Settings Layout**: Fixed overlap between "Enable self-buff reminder" and "Reapply threshold (seconds)"
+  - Added spacing so threshold slider sits cleanly between enable and combat reminder checkboxes
+- **General Tab Layout Polish**: Rebalanced vertical spacing across General settings in both Edit Mode and Options panels
+  - Controls and section headers now use consistent spacing cadence for improved readability
+  - Reduced uneven gaps while preventing overlap/crowding in self-buff and hide-condition sections
+- **Edit Mode General Tab Columns**: Moved Display controls to a right column in advanced General tab
+  - Uses available horizontal space and reduces need for scrolling
+- **Slider Label Clipping**: Fixed slider value text placement in Edit Mode so values render below sliders
+  - Prevents value numbers from overlapping slider labels across tabs
+- **Edit Mode Scrollbars Removed**: Advanced tabs now use static content panels (no vertical scrollbars)
+  - General layout fits available panel space with two-column organization
+- **Settings Dialog Position**: Shifted Edit Mode settings dialog 100px on the X-axis when opened from HUD
+- **Paladin Lightsmith Buff Detection**: Added weapon-enchant fallback handling for Rite of Sanctification/Adjuration
+  - Prevents false "needs reapply" prompts when rite is active as a weapon imbue
+- **Lua Error (#15)**: Fixed nil function call in `Tracker:Update`
+  - Restored missing dungeon/raid helper used by visibility logic
+  - Corrected event handler flow so updates are triggered reliably
+- **Cooldown Timer Missing (#13)**: Restored cooldown text reliability
+  - Added spell-cooldown fallback when action cooldown is unavailable
+  - Cooldowns now resolve for stance/form spells and API-only spell recommendations
+  - Hold-buffer path now refreshes cooldown from cached spell when needed
+- **Taint Error (Cooldown Compare)**: Removed secure-value comparison path in `Tracker:Update`
+  - Cooldown retrieval now uses spell cooldown API consistently
+  - Eliminates secret-number/secret-boolean taint errors from cooldown value handling
+  - Remaining-time arithmetic now uses a protected calculation path to avoid secret-number crashes
+  - Added GCD/recovery and cast/channel lockout fallback so cooldown timing still appears while actions are temporarily unavailable
+  - Fixed channel/cast fallback timing to use stable start/duration values (prevents swipe stutter and cooldown text blinking)
+
 ## [1.1.0] - 2026-02-18
 
 ### Major Features

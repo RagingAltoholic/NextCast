@@ -21,6 +21,225 @@ local lastDisplayTexture = nil
 local lastDisplayKeybind = nil
 local lastDisplayTime = 0
 local DISPLAY_HOLD_DURATION = 1.5  -- Hold for 1.5s to handle ConsolePort update cycles
+local GCD_SPELL_ID = 61304
+
+local SELF_BUFF_SPELLS_BY_CLASS = {
+    DRUID = { 1126 },       -- Mark of the Wild
+    MAGE = { 1459 },        -- Arcane Intellect
+    PRIEST = { 21562 },     -- Power Word: Fortitude
+    WARRIOR = { 6673 },     -- Battle Shout
+    EVOKER = { 364342 },    -- Blessing of the Bronze
+    SHAMAN = { 462854 },    -- Skyfury
+    PALADIN = { 433568, 433583 }, -- Lightsmith: Rite of Sanctification / Rite of Adjuration
+}
+
+local PALADIN_RITE_SPELLS = {
+    [433568] = true,
+    [433583] = true,
+}
+
+local function IsDungeonOrRaid()
+    local inInstance, instanceType = IsInInstance()
+    return inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "scenario")
+end
+
+local function IsSpellKnownForPlayer(spellId)
+    if not spellId then return false end
+
+    if C_SpellBook and C_SpellBook.IsSpellKnown then
+        return C_SpellBook.IsSpellKnown(spellId)
+    end
+
+    if IsPlayerSpell then
+        return IsPlayerSpell(spellId)
+    end
+
+    if IsSpellKnown then
+        return IsSpellKnown(spellId)
+    end
+
+    return false
+end
+
+local function GetPlayerBuffState(spellId)
+    if not spellId then return false, nil end
+
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        local auraInfo = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
+        if auraInfo then
+            return true, auraInfo.expirationTime
+        end
+    end
+
+    if AuraUtil and AuraUtil.FindAuraBySpellID then
+        local aura = AuraUtil.FindAuraBySpellID(spellId, "player", "HELPFUL")
+        if type(aura) == "table" then
+            return true, aura.expirationTime
+        elseif aura then
+            local _, _, _, _, _, expirationTime = AuraUtil.FindAuraBySpellID(spellId, "player", "HELPFUL")
+            return true, expirationTime
+        end
+    end
+
+    if UnitBuff then
+        local spellName = nil
+        if C_Spell and C_Spell.GetSpellName then
+            spellName = C_Spell.GetSpellName(spellId)
+        elseif GetSpellInfo then
+            spellName = GetSpellInfo(spellId)
+        end
+
+        for i = 1, 40 do
+            local name, _, _, _, _, expirationTime, _, _, _, auraSpellId = UnitBuff("player", i)
+            if not name then break end
+            if auraSpellId == spellId or (spellName and name == spellName) then
+                return true, expirationTime
+            end
+        end
+    end
+
+    return false, nil
+end
+
+local function HasActiveWeaponEnchant()
+    if not GetWeaponEnchantInfo then
+        return false
+    end
+
+    local hasMainHandEnchant, mainHandExpiration, _, hasOffHandEnchant, offHandExpiration = GetWeaponEnchantInfo()
+    if hasMainHandEnchant and mainHandExpiration and mainHandExpiration > 0 then
+        return true
+    end
+    if hasOffHandEnchant and offHandExpiration and offHandExpiration > 0 then
+        return true
+    end
+
+    return false
+end
+
+local function GetSelfBuffReminderSpellId(db, currentTime)
+    if not db or not db.selfBuffReminderEnabled then
+        return nil
+    end
+
+    if InCombatLockdown() and not db.selfBuffReminderInCombat then
+        return nil
+    end
+
+    local _, classTag = UnitClass("player")
+    local classBuffs = classTag and SELF_BUFF_SPELLS_BY_CLASS[classTag]
+    if not classBuffs then
+        return nil
+    end
+
+    local threshold = db.selfBuffReminderThreshold or 30
+
+    for _, spellId in ipairs(classBuffs) do
+        if IsSpellKnownForPlayer(spellId) then
+            local hasBuff, expirationTime = GetPlayerBuffState(spellId)
+
+            if not hasBuff and classTag == "PALADIN" and PALADIN_RITE_SPELLS[spellId] and HasActiveWeaponEnchant() then
+                hasBuff = true
+                expirationTime = nil
+            end
+
+            if not hasBuff then
+                return spellId
+            end
+
+            if expirationTime and expirationTime > 0 and (expirationTime - currentTime) <= threshold then
+                return spellId
+            end
+        end
+    end
+
+    return nil
+end
+
+local function GetGCDCooldownCompat()
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local info = C_Spell.GetSpellCooldown(GCD_SPELL_ID)
+        if type(info) == "table" then
+            local startTime = info.startTime
+            local duration = info.duration
+            if (startTime == nil or duration == nil) and info.timeUntilEndOfStartRecovery then
+                startTime = GetTime()
+                duration = info.timeUntilEndOfStartRecovery
+            end
+            if startTime == nil then startTime = 0 end
+            if duration == nil then duration = 0 end
+            return startTime, duration, 1
+        end
+    end
+
+    if GetSpellCooldown then
+        local startTime, duration = GetSpellCooldown(GCD_SPELL_ID)
+        if startTime == nil then startTime = 0 end
+        if duration == nil then duration = 0 end
+        return startTime, duration, 1
+    end
+
+    return 0, 0, 0
+end
+
+local function GetCastOrChannelCooldownCompat()
+    if UnitChannelInfo then
+        local _, _, _, startMS, endMS = UnitChannelInfo("player")
+        if startMS and endMS and endMS > startMS then
+            local startTime = startMS / 1000
+            local duration = (endMS - startMS) / 1000
+            if duration > 0 then
+                return startTime, duration, 1
+            end
+        end
+    end
+
+    if UnitCastingInfo then
+        local _, _, _, startMS, endMS = UnitCastingInfo("player")
+        if startMS and endMS and endMS > startMS then
+            local startTime = startMS / 1000
+            local duration = (endMS - startMS) / 1000
+            if duration > 0 then
+                return startTime, duration, 1
+            end
+        end
+    end
+
+    return nil, nil, 0
+end
+
+local function GetSpellCooldownCompat(spellId)
+    if not spellId then
+        return 0, 0, 0
+    end
+
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local info = C_Spell.GetSpellCooldown(spellId)
+        if type(info) == "table" then
+            local startTime = info.startTime
+            local duration = info.duration
+            if (startTime == nil or duration == nil) and info.timeUntilEndOfStartRecovery then
+                startTime = GetTime()
+                duration = info.timeUntilEndOfStartRecovery
+            end
+            if (startTime == nil or duration == nil) and info.isOnGCD then
+                return GetGCDCooldownCompat()
+            end
+            if startTime == nil then startTime = 0 end
+            if duration == nil then duration = 0 end
+            return startTime, duration, 1
+        end
+    end
+
+    if GetSpellCooldown then
+        local startTime, duration = GetSpellCooldown(spellId)
+        if startTime == nil then startTime = 0 end
+        if duration == nil then duration = 0 end
+        return startTime, duration, 1
+    end
+
+    return 0, 0, 0
+end
 
 
 local function FormatTime(seconds)
@@ -34,6 +253,18 @@ local function FormatTime(seconds)
     else
         return string.format("%dh", math.floor(seconds / 3600 + 0.5))
     end
+end
+
+local function TryCalculateRemaining(startTime, duration, currentTime)
+    local ok, remaining = pcall(function()
+        return (startTime + duration) - currentTime
+    end)
+
+    if ok and type(remaining) == "number" then
+        return remaining
+    end
+
+    return nil
 end
 
 local MODIFIER_TOKENS = {
@@ -189,17 +420,15 @@ function Tracker:OnEvent(event, ...)
         local spellId = ...
         if spellId then
             glowingSpells[spellId] = true
-            self:Update()
         end
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
         local spellId = ...
         if spellId then
             glowingSpells[spellId] = nil
-            self:Update()
         end
     end
-    local inInstance, instanceType = IsInInstance()
-    return inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "scenario")
+
+    self:Update()
 end
 
 function Tracker:Update()
@@ -240,8 +469,15 @@ function Tracker:Update()
     local recommendedSpellId = nil
     local currentTime = GetTime()
     local usingFallback = false
-    
-    if C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
+
+    local buffReminderSpellId = GetSelfBuffReminderSpellId(db, currentTime)
+    if buffReminderSpellId then
+        recommendedSpellId = buffReminderSpellId
+        usingFallback = true
+        showRecommendation = true
+    end
+
+    if not recommendedSpellId and C_AssistedCombat and C_AssistedCombat.GetNextCastSpell then
         -- Use cached result if recent (within 500ms)
         if cachedRecommendedSpell and (currentTime - lastApiCallTime) < API_CACHE_DURATION then
             recommendedSpellId = cachedRecommendedSpell
@@ -317,6 +553,7 @@ function Tracker:Update()
                         lastDisplayTexture = texture
                         lastDisplayKeybind = keybind
                         lastDisplayTime = currentTime
+                        cooldownStart, cooldownDuration, cooldownEnabled = GetSpellCooldownCompat(directSpellId)
                         break
                     end
                 end
@@ -345,16 +582,7 @@ function Tracker:Update()
                             end
                         end
 
-                        if actionId then
-                            cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(actionId)
-                        elseif button and button.cooldown and button.cooldown.GetCooldownTimes then
-                            local startMS, durationMS = button.cooldown:GetCooldownTimes()
-                            if startMS and durationMS then
-                                cooldownStart = startMS / 1000
-                                cooldownDuration = durationMS / 1000
-                                cooldownEnabled = 1
-                            end
-                        end
+                        cooldownStart, cooldownDuration, cooldownEnabled = GetSpellCooldownCompat(spellId)
                         -- Cache display info to prevent flicker
                         lastDisplaySpellId = spellId
                         lastDisplayActionId = actionId
@@ -378,14 +606,18 @@ function Tracker:Update()
         elseif GetSpellTexture then
             texture = GetSpellTexture(recommendedSpellId)
         end
+
+        cooldownStart, cooldownDuration, cooldownEnabled = GetSpellCooldownCompat(recommendedSpellId)
     end
 
     -- If nothing found this frame, keep last display briefly to avoid flicker
     if not texture and lastDisplaySpellId and (currentTime - lastDisplayTime) <= DISPLAY_HOLD_DURATION then
         texture = lastDisplayTexture
         keybind = lastDisplayKeybind
-        if lastDisplayActionId then
-            cooldownStart, cooldownDuration, cooldownEnabled = GetActionCooldown(lastDisplayActionId)
+        if lastDisplaySpellId then
+            cooldownStart, cooldownDuration, cooldownEnabled = GetSpellCooldownCompat(lastDisplaySpellId)
+        else
+            cooldownStart, cooldownDuration, cooldownEnabled = 0, 0, 0
         end
     elseif not texture and lastDisplaySpellId then
         -- Hold buffer expired, clear the cache
@@ -396,12 +628,28 @@ function Tracker:Update()
     end
 
     -- Always update spell display (even out of combat)
+    local currentRemaining = nil
+    if cooldownEnabled == 1 and cooldownStart and cooldownDuration then
+        currentRemaining = TryCalculateRemaining(cooldownStart, cooldownDuration, GetTime())
+    end
+
+    if (not currentRemaining or currentRemaining <= 0) then
+        local castStart, castDuration, castEnabled = GetCastOrChannelCooldownCompat()
+        if castEnabled == 1 then
+            cooldownStart, cooldownDuration, cooldownEnabled = castStart, castDuration, castEnabled
+        end
+    end
+
     ui:SetSpell(texture, keybind)
     ui:SetCooldown(cooldownStart or 0, cooldownDuration or 0, cooldownEnabled == 1)
 
     if cooldownStart and cooldownDuration and cooldownEnabled == 1 then
-        local remaining = (cooldownStart + cooldownDuration) - GetTime()
-        ui:SetCooldownText(FormatTime(remaining), remaining)
+        local remaining = TryCalculateRemaining(cooldownStart, cooldownDuration, GetTime())
+        if remaining then
+            ui:SetCooldownText(FormatTime(remaining), remaining)
+        else
+            ui:SetCooldownText("")
+        end
     else
         ui:SetCooldownText("")
     end

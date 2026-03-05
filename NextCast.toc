@@ -3,7 +3,7 @@
 ## Notes: Shows Blizzard Assisted Combat as a customizable floating button.
 ## Author: RagingAltoholic
 ## Category-enUS: HUD
-## Version: 1.1.0
+## Version: 1.1.1
 ## SavedVariables: NextCastDB
 ## OptionalDeps: Blizzard_Settings
 

@@ -31,6 +31,9 @@ local defaults = {
     hideWhenMounted = false,
     hideWhenInVehicle = false,
     hideWhenPossessed = false,
+    selfBuffReminderEnabled = true,
+    selfBuffReminderThreshold = 30,
+    selfBuffReminderInCombat = false,
     cdShowTenths = true,
 }
 
