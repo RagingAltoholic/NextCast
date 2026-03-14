@@ -61,13 +61,42 @@ local function IsSpellKnownForPlayer(spellId)
     return false
 end
 
+local function GetSpellNameCompat(spellId)
+    if not spellId then
+        return nil
+    end
+
+    if C_Spell and C_Spell.GetSpellName then
+        return C_Spell.GetSpellName(spellId)
+    end
+
+    if GetSpellInfo then
+        return GetSpellInfo(spellId)
+    end
+
+    return nil
+end
+
 local function GetPlayerBuffState(spellId)
     if not spellId then return false, nil end
+
+    local spellName = GetSpellNameCompat(spellId)
 
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         local auraInfo = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
         if auraInfo then
             return true, auraInfo.expirationTime
+        end
+    end
+
+    -- Fallback for buffs where cast spell ID and applied aura ID differ.
+    if spellName and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+        for i = 1, 255 do
+            local auraInfo = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            if not auraInfo then break end
+            if auraInfo.name == spellName then
+                return true, auraInfo.expirationTime
+            end
         end
     end
 
@@ -81,14 +110,17 @@ local function GetPlayerBuffState(spellId)
         end
     end
 
-    if UnitBuff then
-        local spellName = nil
-        if C_Spell and C_Spell.GetSpellName then
-            spellName = C_Spell.GetSpellName(spellId)
-        elseif GetSpellInfo then
-            spellName = GetSpellInfo(spellId)
+    if spellName and AuraUtil and AuraUtil.FindAuraByName then
+        local aura = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
+        if type(aura) == "table" then
+            return true, aura.expirationTime
+        elseif aura then
+            local _, _, _, _, _, expirationTime = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
+            return true, expirationTime
         end
+    end
 
+    if UnitBuff then
         for i = 1, 40 do
             local name, _, _, _, _, expirationTime, _, _, _, auraSpellId = UnitBuff("player", i)
             if not name then break end

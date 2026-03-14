@@ -2,6 +2,13 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.1.2] - 2026-03-13
+
+### Fixed
+- **Evoker Self-Buff Reminder Stall**: Blessing of the Bronze no longer gets stuck as the only suggestion
+  - Added aura-name fallback detection for cases where buff aura IDs differ from cast spell IDs
+  - Recommendation flow now advances to Assisted Combat rotation when the buff is already active
+
 ## [1.1.1] - 2026-03-04
 
 ### Added
