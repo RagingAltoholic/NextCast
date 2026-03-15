@@ -101,22 +101,28 @@ local function GetPlayerBuffState(spellId)
     end
 
     if AuraUtil and AuraUtil.FindAuraBySpellID then
-        local aura = AuraUtil.FindAuraBySpellID(spellId, "player", "HELPFUL")
-        if type(aura) == "table" then
-            return true, aura.expirationTime
-        elseif aura then
-            local _, _, _, _, _, expirationTime = AuraUtil.FindAuraBySpellID(spellId, "player", "HELPFUL")
-            return true, expirationTime
+        local ok, aura = pcall(AuraUtil.FindAuraBySpellID, spellId, "player", "HELPFUL")
+        if ok and aura then
+            if type(aura) == "table" then
+                return true, aura.expirationTime
+            end
+            local okLegacy, _, _, _, _, _, expirationTime = pcall(AuraUtil.FindAuraBySpellID, spellId, "player", "HELPFUL")
+            if okLegacy then
+                return true, expirationTime
+            end
         end
     end
 
     if spellName and AuraUtil and AuraUtil.FindAuraByName then
-        local aura = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
-        if type(aura) == "table" then
-            return true, aura.expirationTime
-        elseif aura then
-            local _, _, _, _, _, expirationTime = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
-            return true, expirationTime
+        local ok, aura = pcall(AuraUtil.FindAuraByName, spellName, "player", "HELPFUL")
+        if ok and aura then
+            if type(aura) == "table" then
+                return true, aura.expirationTime
+            end
+            local okLegacy, _, _, _, _, _, expirationTime = pcall(AuraUtil.FindAuraByName, spellName, "player", "HELPFUL")
+            if okLegacy then
+                return true, expirationTime
+            end
         end
     end
 

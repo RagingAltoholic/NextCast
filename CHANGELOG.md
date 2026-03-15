@@ -2,6 +2,13 @@
 
 All notable changes to NextCast will be documented in this file.
 
+## [1.1.3] - 2026-03-15
+
+### Fixed
+- **Aura Lookup Crash (Retail 12.x compatibility)**: Prevented nil-call errors from `AuraUtil.FindAuraByName`/`FindAuraBySpellID` on clients missing aura-provider methods
+  - Wrapped AuraUtil lookups in protected calls (`pcall`) inside buff reminder checks
+  - Added graceful fallback behavior so recommendation updates continue even when AuraUtil lookup fails
+
 ## [1.1.2] - 2026-03-13
 
 ### Fixed
